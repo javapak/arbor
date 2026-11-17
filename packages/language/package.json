@@ -1,7 +1,7 @@
 {
-  "name": "@mdsl/language",
+  "name": "@arbor/language",
   "version": "0.1.0",
-  "description": "Langium implementation of mdsl: the profile (meta) language and the generic model language.",
+  "description": "Langium implementation of arbor: the profile (meta) language and the generic model language.",
   "type": "module",
   "main": "out/index.js",
   "types": "out/index.d.ts",
@@ -9,14 +9,14 @@
     ".": "./out/index.js"
   },
   "bin": {
-    "mdsl": "./out/cli/main.js"
+    "arbor": "./out/cli/main.js"
   },
   "scripts": {
     "generate": "langium generate"
   },
   "dependencies": {
-    "@mdsl/adapter-flow": "0.1.0",
-    "@mdsl/ir": "0.1.0",
+    "@arbor/adapter-flow": "0.1.0",
+    "@arbor/ir": "0.1.0",
     "langium": "~4.4.2",
     "vscode-languageserver": "~10.1.2"
   },

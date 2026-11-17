@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DiagnosticCode as C } from '../src/language/mdsl-validator.js';
+import { DiagnosticCode as C } from '../src/language/arbor-validator.js';
 import { codes, withProfiles } from './helpers.js';
 
 // A second profile that reuses a core kind name.
@@ -14,14 +14,14 @@ describe('kind and enum qualification', () => {
     it('resolves profile-qualified kinds and enums', async () => {
         const r = await withProfiles(model(`
             software.Primitive P { builtin: uuid }
-            persistence.Entity E { tableName: "e"  persistence.Column c { type: -> P } }`), { 'other.mdsl': OTHER });
+            persistence.Entity E { tableName: "e"  persistence.Column c { type: -> P } }`), { 'other.arbor': OTHER });
         expect(r.diagnostics).toEqual([]);
         const els = r.ir.models.find(m => m.name === 't')!.elements;
         expect(els.find(e => e.name === 'c')?.kind).toBe('persistence.Column');
     });
 
     it('lets kind names repeat across profiles; inside a profile its own names win', async () => {
-        const r = await withProfiles(model('Form f { other.Field x { label: "X" } }'), { 'other.mdsl': OTHER });
+        const r = await withProfiles(model('Form f { other.Field x { label: "X" } }'), { 'other.arbor': OTHER });
         expect(r.diagnostics).toEqual([]);
         const form = r.ir.profiles.find(p => p.name === 'other')!.kinds.find(k => k.name === 'Form')!;
         expect(form.features[0]).toMatchObject({ feature: 'contains', target: 'other.Field' });
@@ -32,7 +32,7 @@ describe('kind and enum qualification', () => {
     it('reports a simple name defined by several profiles as ambiguous', async () => {
         const r = await withProfiles(model(`
             Primitive P { builtin: uuid }
-            DataType D { Field f { type: -> P } }`), { 'other.mdsl': OTHER });
+            DataType D { Field f { type: -> P } }`), { 'other.arbor': OTHER });
         const d = r.diagnostics.find(x => x.code === C.AmbiguousName);
         expect(d?.message).toContain('software.Field');
         expect(d?.message).toContain('other.Field');
@@ -41,13 +41,13 @@ describe('kind and enum qualification', () => {
     it('qualifying the name removes the ambiguity', async () => {
         const r = await withProfiles(model(`
             Primitive P { builtin: uuid }
-            DataType D { software.Field f { type: -> P } }`), { 'other.mdsl': OTHER });
+            DataType D { software.Field f { type: -> P } }`), { 'other.arbor': OTHER });
         expect(r.diagnostics).toEqual([]);
     });
 
     it('accepts qualified names inside profiles', async () => {
         const r = await withProfiles(model(''), {
-            'ext.mdsl': `profile ext {
+            'ext.arbor': `profile ext {
                 kind Table extends persistence.Entity { prop engine: string = "innodb" }
                 kind Col { prop action: persistence.OnDeleteAction = cascade }
             }`
@@ -56,7 +56,7 @@ describe('kind and enum qualification', () => {
     });
 
     it('rejects two profiles with the same name', async () => {
-        const r = await withProfiles(model(''), { 'dup.mdsl': 'profile software {}' });
+        const r = await withProfiles(model(''), { 'dup.arbor': 'profile software {}' });
         expect(codes(r)).toContain(C.DuplicateName);
     });
 });
@@ -71,7 +71,7 @@ describe('element paths', () => {
 
     it('resolves a dotted path into nested elements', async () => {
         const r = await withProfiles(SHOPLIKE, {
-            'refs.mdsl': `model refs {
+            'refs.arbor': `model refs {
                 Component Billing { requires: [-> t.Payments, -> Checkout.OrderApi] }
             }`
         });
@@ -82,7 +82,7 @@ describe('element paths', () => {
 
     it('resolves a model-qualified path and checks the target kind', async () => {
         const r = await withProfiles(SHOPLIKE, {
-            'refs.mdsl': `model refs {
+            'refs.arbor': `model refs {
                 Component Billing { requires: [-> t.Checkout.OrderApi.placeOrder] }
             }`
         });
@@ -101,15 +101,15 @@ describe('element paths', () => {
 
     it('reports an unknown path segment', async () => {
         const r = await withProfiles(SHOPLIKE, {
-            'refs.mdsl': 'model refs { Component Billing { requires: [-> Checkout.Nope] } }'
+            'refs.arbor': 'model refs { Component Billing { requires: [-> Checkout.Nope] } }'
         });
         expect(codes(r)).toEqual(['linking']);
     });
 
     it('reports a top-level element name used by several models as ambiguous', async () => {
         const r = await withProfiles(SHOPLIKE, {
-            'a.mdsl': 'model a { Interface Payments {} }',
-            'refs.mdsl': 'model refs { Component Billing { requires: [-> Payments] } }'
+            'a.arbor': 'model a { Interface Payments {} }',
+            'refs.arbor': 'model refs { Component Billing { requires: [-> Payments] } }'
         });
         expect(codes(r)).toEqual([C.AmbiguousName]);
     });

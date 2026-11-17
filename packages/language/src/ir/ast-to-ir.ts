@@ -9,7 +9,7 @@ import {
     IR_VERSION,
     type IRDocument, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile,
     type IRScalar, type IRValue
-} from '@mdsl/ir';
+} from '@arbor/ir';
 import type { Element, Feature, Kind, Model, Profile, Value } from '../language/generated/ast.js';
 import { isListValue, isModel, isProfile, isRefValue } from '../language/generated/ast.js';
 import {

@@ -1,7 +1,7 @@
 {
-  "name": "@mdsl/ir",
+  "name": "@arbor/ir",
   "version": "0.1.0",
-  "description": "The mdsl intermediate representation: types, JSON Schema and read helpers. No dependencies.",
+  "description": "The arbor intermediate representation: types, JSON Schema and read helpers. No dependencies.",
   "type": "module",
   "main": "out/index.js",
   "types": "out/index.d.ts",

@@ -4,9 +4,9 @@
  * and passes the text in.
  */
 import { EmptyFileSystem, URI, type LangiumDocument } from 'langium';
-import type { IRDocument } from '@mdsl/ir';
+import type { IRDocument } from '@arbor/ir';
 import type { Document } from '../language/generated/ast.js';
-import { createMdslServices } from '../language/mdsl-module.js';
+import { createArborServices } from '../language/arbor-module.js';
 import { toIR } from '../ir/ast-to-ir.js';
 
 export interface Source { uri: string; text: string }
@@ -31,7 +31,7 @@ export interface LoadResult {
 const SEVERITY = ['error', 'error', 'warning', 'info', 'hint'] as const;
 
 export async function loadWorkspace(sources: Source[]): Promise<LoadResult> {
-    const { shared } = createMdslServices(EmptyFileSystem);
+    const { shared } = createArborServices(EmptyFileSystem);
     const factory = shared.workspace.LangiumDocumentFactory;
     const docs: LangiumDocument<Document>[] = sources.map(s => {
         const doc = factory.fromString<Document>(s.text, URI.parse(toUri(s.uri)));

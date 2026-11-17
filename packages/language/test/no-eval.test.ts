@@ -24,7 +24,7 @@ describe('no runtime code generation', () => {
     });
 
     it.runIf(existsSync(cli))('full pipeline runs with code generation disabled', () => {
-        const files = ['software', 'persistence', 'shop'].map(n => `${root}examples/${n}.mdsl`);
+        const files = ['software', 'persistence', 'shop'].map(n => `${root}examples/${n}.arbor`);
         const r = spawnSync(process.execPath, [FLAG, cli, 'flow', ...files], { encoding: 'utf8' });
         expect(r.stderr).toBe('');
         expect(r.status).toBe(0);

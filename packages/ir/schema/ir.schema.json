@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mdsl.dev/schema/ir/0.1.0",
-  "title": "mdsl IR",
+  "$id": "https://github.com/javapak/arbor/schema/ir/0.1.0",
+  "title": "arbor IR",
   "description": "The hub format. Mirrors packages/ir/src/types.ts; keep them in sync.",
   "type": "object",
   "required": ["irVersion", "profiles", "models"],

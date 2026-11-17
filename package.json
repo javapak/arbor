@@ -1,5 +1,5 @@
 {
-  "name": "mdsl",
+  "name": "arbor",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -8,7 +8,7 @@
     "packages/adapter-flow"
   ],
   "scripts": {
-    "generate": "npm run generate -w @mdsl/language",
+    "generate": "npm run generate -w @arbor/language",
     "build": "npm run generate && tsc -b packages/ir packages/adapter-flow packages/language",
     "test": "npm run build && vitest run",
     "lint": "eslint .",

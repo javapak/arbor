@@ -11,11 +11,11 @@
  */
 import { AstUtils, type AstNode, type IndexManager, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import type {
-    Element, Kind, MdslAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual
+    Element, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual
 } from './generated/ast.js';
 import { isElement, isListValue, isRefValue } from './generated/ast.js';
-import type { MdslServices } from './mdsl-module.js';
-import type { MdslScopeProvider } from './mdsl-scope.js';
+import type { ArborServices } from './arbor-module.js';
+import type { ArborScopeProvider } from './arbor-scope.js';
 import {
     allFeatures, bounds, checkLiteral, closest, containmentCandidates,
     elementId, findInheritanceCycle, isA, isRequired
@@ -23,32 +23,32 @@ import {
 
 export const DiagnosticCode = {
     // profiles
-    DuplicateName: 'MDSL001',
-    InheritanceCycle: 'MDSL002',
-    FeatureShadowed: 'MDSL003',
-    BadDefault: 'MDSL004',
-    BadMultiplicity: 'MDSL005',
-    UnknownVisualKey: 'MDSL006',
-    AmbiguousName: 'MDSL007',
+    DuplicateName: 'ARB001',
+    InheritanceCycle: 'ARB002',
+    FeatureShadowed: 'ARB003',
+    BadDefault: 'ARB004',
+    BadMultiplicity: 'ARB005',
+    UnknownVisualKey: 'ARB006',
+    AmbiguousName: 'ARB007',
     // models
-    AbstractInstance: 'MDSL101',
-    UnknownSlot: 'MDSL102',
-    TypeMismatch: 'MDSL103',
-    RefTargetKind: 'MDSL104',
-    MissingRequired: 'MDSL105',
-    ChildNotAllowed: 'MDSL106',
-    TooMany: 'MDSL107',
-    DuplicateSlot: 'MDSL108',
-    DuplicateId: 'MDSL110'
+    AbstractInstance: 'ARB101',
+    UnknownSlot: 'ARB102',
+    TypeMismatch: 'ARB103',
+    RefTargetKind: 'ARB104',
+    MissingRequired: 'ARB105',
+    ChildNotAllowed: 'ARB106',
+    TooMany: 'ARB107',
+    DuplicateSlot: 'ARB108',
+    DuplicateId: 'ARB110'
 } as const;
 
 /** Keys the flow adapter understands. Others are allowed but warned about. */
 export const KNOWN_VISUAL_KEYS = ['shape', 'color', 'icon', 'label', 'width', 'height', 'container'];
 
-export function registerValidationChecks(services: MdslServices): void {
+export function registerValidationChecks(services: ArborServices): void {
     const registry = services.validation.ValidationRegistry;
-    const validator = services.validation.MdslValidator;
-    const checks: ValidationChecks<MdslAstType> = {
+    const validator = services.validation.ArborValidator;
+    const checks: ValidationChecks<ArborAstType> = {
         Profile: validator.checkProfile,
         Kind: validator.checkKind,
         PropFeature: validator.checkPropFeature,
@@ -60,11 +60,11 @@ export function registerValidationChecks(services: MdslServices): void {
     registry.register(checks, validator);
 }
 
-export class MdslValidator {
-    private readonly scopes: MdslScopeProvider;
+export class ArborValidator {
+    private readonly scopes: ArborScopeProvider;
     private readonly index: IndexManager;
 
-    constructor(services: MdslServices) {
+    constructor(services: ArborServices) {
         this.scopes = services.references.ScopeProvider;
         this.index = services.shared.workspace.IndexManager;
     }

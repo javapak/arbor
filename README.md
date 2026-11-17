@@ -1,4 +1,4 @@
-# mdsl
+# arbor
 
 A small, LLM-friendly meta-modeling language for software models, built on
 [Langium](https://langium.org) (TypeScript, runs in Node and in a browser web
@@ -6,7 +6,7 @@ worker, no JVM), with an intermediate representation (IR) as the hub between
 the text and everything else, including the WebGPU flow renderer.
 
 ```
- .mdsl text ──► Langium AST ──► IR (JSON) ──► flow graph   (renderer)
+ .arbor text ──► Langium AST ──► IR (JSON) ──► flow graph   (renderer)
  (profiles +    (packages/      (packages/ir) ──► JSON Schema / OpenAPI / DDL …   (future emitters)
   models)        language)        ▲
                                   └── importers (Ecore, OAS, …)                  (future)
@@ -20,9 +20,9 @@ knows about both Langium and the IR.
 
 | OMG | Here | Where |
 |---|---|---|
-| M3 (MOF) | the grammar: `kind`, `prop`, `contains`, `ref`, `enum`, `visual` | `packages/language/src/language/mdsl.langium` |
-| M2 | **profiles**, as plain data, loaded at runtime | `examples/software.mdsl`, `examples/persistence.mdsl` |
-| M1 | **models** in one generic instance syntax | `examples/shop.mdsl` |
+| M3 (MOF) | the grammar: `kind`, `prop`, `contains`, `ref`, `enum`, `visual` | `packages/language/src/language/arbor.langium` |
+| M2 | **profiles**, as plain data, loaded at runtime | `examples/software.arbor`, `examples/persistence.arbor` |
+| M1 | **models** in one generic instance syntax | `examples/shop.arbor` |
 
 Profiles are interpreted, never compiled: users can define new kinds at
 runtime with no TypeScript compiler API and no `eval`.
@@ -31,18 +31,18 @@ runtime with no TypeScript compiler API and no `eval`.
 
 | Package | Depends on | Purpose |
 |---|---|---|
-| `@mdsl/ir` | nothing | IR types, JSON Schema, `IRIndex` read helpers (inheritance, defaults, visuals) |
-| `@mdsl/adapter-flow` | `@mdsl/ir` | IR → `{ nodes, edges }` for the renderer, with layout from a sidecar |
-| `@mdsl/language` | Langium, the two above | grammar, validator, AST → IR, CLI, LSP entry points (Node + web worker) |
+| `@arbor/ir` | nothing | IR types, JSON Schema, `IRIndex` read helpers (inheritance, defaults, visuals) |
+| `@arbor/adapter-flow` | `@arbor/ir` | IR → `{ nodes, edges }` for the renderer, with layout from a sidecar |
+| `@arbor/language` | Langium, the two above | grammar, validator, AST → IR, CLI, LSP entry points (Node + web worker) |
 
 ## Getting started
 
 ```bash
 npm install
 npm test            # langium generate + tsc + vitest
-npm run check -- examples/*.mdsl
-npm run ir    -- examples/*.mdsl
-npm run flow  -- examples/*.mdsl
+npm run check -- examples/*.arbor
+npm run ir    -- examples/*.arbor
+npm run flow  -- examples/*.arbor
 ```
 
 `check` prints one JSON diagnostic per line, each with a stable code and,
@@ -70,10 +70,10 @@ Several template engines do the same.
 ## Wiring to the renderer
 
 ```ts
-import { loadWorkspace } from '@mdsl/language';
-import { toFlowGraph } from '@mdsl/adapter-flow';
+import { loadWorkspace } from '@arbor/language';
+import { toFlowGraph } from '@arbor/adapter-flow';
 
-const { ir, diagnostics } = await loadWorkspace([{ uri: 'shop.mdsl', text }, /* profiles */]);
+const { ir, diagnostics } = await loadWorkspace([{ uri: 'shop.arbor', text }, /* profiles */]);
 const { nodes, edges } = toFlowGraph(ir, { layout: savedLayout, containment: 'nest' });
 ```
 
@@ -98,7 +98,7 @@ and connect Monaco to it (see Langium's Monaco tutorial).
 
 - [x] Qualified-name scoping (`Payments.charge`) and per-profile namespaces, so
       kind names can repeat across profiles (`software.Field`). See
-      `packages/language/src/language/mdsl-scope.ts`.
+      `packages/language/src/language/arbor-scope.ts`.
 - [ ] Explicit containment slot syntax for when a child fits several containments.
 - [ ] Formatter (canonical output, so LLM-generated and hand-written text diff cleanly).
 - [ ] Diagram → text edits (CST-range edits from renderer interactions).

@@ -1,21 +1,21 @@
 #!/usr/bin/env -S node --disallow-code-generation-from-strings
 /**
- * mdsl CLI
+ * arbor CLI
  *
- *   mdsl check <files...>   diagnostics as JSON lines; exit 1 on errors
- *   mdsl ir    <files...>   print the IR
- *   mdsl flow  <files...>   print renderer nodes/edges (via the IR)
+ *   arbor check <files...>   diagnostics as JSON lines; exit 1 on errors
+ *   arbor ir    <files...>   print the IR
+ *   arbor flow  <files...>   print renderer nodes/edges (via the IR)
  *
  * Pass profile files and model files together; kinds resolve across files.
  */
 import { readFile } from 'node:fs/promises';
-import { toFlowGraph } from '@mdsl/adapter-flow';
+import { toFlowGraph } from '@arbor/adapter-flow';
 import { loadWorkspace } from './load.js';
 
 async function main(argv: string[]): Promise<number> {
     const [cmd, ...files] = argv;
     if (!cmd || !['check', 'ir', 'flow'].includes(cmd) || files.length === 0) {
-        process.stderr.write('usage: mdsl <check|ir|flow> <files...>\n');
+        process.stderr.write('usage: arbor <check|ir|flow> <files...>\n');
         return 2;
     }
     const sources = await Promise.all(files.map(async f => ({ uri: f, text: await readFile(f, 'utf8') })));

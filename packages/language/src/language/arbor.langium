@@ -1,4 +1,4 @@
-// mdsl: one grammar, two kinds of file.
+// arbor: one grammar, two kinds of file.
 //
 //   profile <Name> { ... }   M2: defines element kinds   (MOF / EMOF analog)
 //   model   <Name> { ... }   M1: instances of those kinds
@@ -9,7 +9,7 @@
 // LLM-friendly by construction: keyword-first, braces everywhere,
 // no significant whitespace, one shape for every element.
 
-grammar Mdsl
+grammar Arbor
 
 entry Document: Profile | Model;
 

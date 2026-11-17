@@ -1,12 +1,12 @@
 import { Validator } from '@cfworker/json-schema';   // interprets schemas; no codegen
 import { describe, expect, it } from 'vitest';
-import { IRIndex } from '@mdsl/ir';
+import { IRIndex } from '@arbor/ir';
 import schema from '../../ir/schema/ir.schema.json' with { type: 'json' };
-import { toFlowGraph } from '@mdsl/adapter-flow';
+import { toFlowGraph } from '@arbor/adapter-flow';
 import { EmptyFileSystem, URI } from 'langium';
 import { loadWorkspace } from '../src/cli/load.js';
 import { toIR } from '../src/ir/ast-to-ir.js';
-import { createMdslServices } from '../src/language/mdsl-module.js';
+import { createArborServices } from '../src/language/arbor-module.js';
 import type { Document } from '../src/language/generated/ast.js';
 import { PERSISTENCE, SHOP, SOFTWARE, withProfiles } from './helpers.js';
 
@@ -42,10 +42,10 @@ describe('AST -> IR', () => {
     });
 
     it('is self-describing: profiles travel with the model', async () => {
-        const { shared } = createMdslServices(EmptyFileSystem);
+        const { shared } = createArborServices(EmptyFileSystem);
         const f = shared.workspace.LangiumDocumentFactory;
         const docs = [['software', SOFTWARE], ['persistence', PERSISTENCE], ['shop', SHOP]].map(([n, t]) => {
-            const d = f.fromString<Document>(t, URI.parse(`file:///${n}.mdsl`));
+            const d = f.fromString<Document>(t, URI.parse(`file:///${n}.arbor`));
             shared.workspace.LangiumDocuments.addDocument(d);
             return d;
         });
@@ -64,7 +64,7 @@ describe('AST -> IR', () => {
     });
 
     it('still produces an IR when the workspace has errors', async () => {
-        const r = await loadWorkspace([{ uri: 'm.mdsl', text: 'model m { Missing X {} }' }]);
+        const r = await loadWorkspace([{ uri: 'm.arbor', text: 'model m { Missing X {} }' }]);
         expect(r.ok).toBe(false);
         expect(r.ir.models[0].elements).toEqual([]);
     });

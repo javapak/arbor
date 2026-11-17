@@ -1,4 +1,4 @@
-# mdsl language reference
+# arbor language reference
 
 Compact enough to paste into an LLM prompt alongside the profiles in use.
 
@@ -64,28 +64,28 @@ Every element has the same shape:
 
 ## Diagnostics
 
-`mdsl check` prints one JSON object per line:
+`arbor check` prints one JSON object per line:
 
 ```json
-{"uri":"bad.mdsl","line":3,"column":5,"severity":"error","code":"MDSL102",
+{"uri":"bad.arbor","line":3,"column":5,"severity":"error","code":"ARB102",
  "message":"Entity has no feature 'tabelName'. Did you mean 'tableName'?","fix":"tableName"}
 ```
 
 | Code | Meaning |
 |---|---|
-| MDSL001 | duplicate name (in a profile, or two profiles/models with the same name) |
-| MDSL002 | inheritance cycle |
-| MDSL003 | feature redefined as a different feature type |
-| MDSL004 | default doesn't match the property type |
-| MDSL005 | bad multiplicity |
-| MDSL006 | unknown visual key (warning) |
-| MDSL007 | simple name defined by several profiles (or models); write the qualified name listed in the message |
-| MDSL101 | abstract kind instantiated |
-| MDSL102 | unknown slot (`fix` = closest feature) |
-| MDSL103 | value has the wrong type |
-| MDSL104 | reference points to the wrong kind |
-| MDSL105 | missing required feature (`fix` = feature name) |
-| MDSL106 | nested element fits no containment, or several |
-| MDSL107 | too many values / children |
-| MDSL108 | slot set twice |
-| MDSL110 | duplicate element ID |
+| ARB001 | duplicate name (in a profile, or two profiles/models with the same name) |
+| ARB002 | inheritance cycle |
+| ARB003 | feature redefined as a different feature type |
+| ARB004 | default doesn't match the property type |
+| ARB005 | bad multiplicity |
+| ARB006 | unknown visual key (warning) |
+| ARB007 | simple name defined by several profiles (or models); write the qualified name listed in the message |
+| ARB101 | abstract kind instantiated |
+| ARB102 | unknown slot (`fix` = closest feature) |
+| ARB103 | value has the wrong type |
+| ARB104 | reference points to the wrong kind |
+| ARB105 | missing required feature (`fix` = feature name) |
+| ARB106 | nested element fits no containment, or several |
+| ARB107 | too many values / children |
+| ARB108 | slot set twice |
+| ARB110 | duplicate element ID |

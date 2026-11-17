@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DiagnosticCode as C } from '../src/language/mdsl-validator.js';
+import { DiagnosticCode as C } from '../src/language/arbor-validator.js';
 import { loadWorkspace } from '../src/cli/load.js';
 import { codes, withProfiles } from './helpers.js';
 
@@ -67,24 +67,24 @@ describe('model validation', () => {
 
 describe('profile validation', () => {
     it('inheritance cycle', async () => {
-        const r = await loadWorkspace([{ uri: 'p.mdsl', text: 'profile p { kind A extends B {} kind B extends A {} }' }]);
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: 'profile p { kind A extends B {} kind B extends A {} }' }]);
         expect(codes(r)).toContain(C.InheritanceCycle);
     });
 
     it('bad default', async () => {
-        const r = await loadWorkspace([{ uri: 'p.mdsl', text: 'profile p { kind A { prop n: int = "x" } }' }]);
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: 'profile p { kind A { prop n: int = "x" } }' }]);
         expect(codes(r)).toContain(C.BadDefault);
     });
 
     it('unknown visual key warns with a suggestion', async () => {
-        const r = await loadWorkspace([{ uri: 'p.mdsl', text: 'profile p { kind A { visual { colour: "#fff" } } }' }]);
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: 'profile p { kind A { visual { colour: "#fff" } } }' }]);
         const d = r.diagnostics.find(x => x.code === C.UnknownVisualKey);
         expect(d?.severity).toBe('warning');
         expect(d?.fix).toBe('color');
     });
 
     it('bad multiplicity', async () => {
-        const r = await loadWorkspace([{ uri: 'p.mdsl', text: 'profile p { kind A { prop n: int [3..1] } }' }]);
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: 'profile p { kind A { prop n: int [3..1] } }' }]);
         expect(codes(r)).toContain(C.BadMultiplicity);
     });
 });

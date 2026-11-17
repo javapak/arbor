@@ -18,7 +18,7 @@ import {
 import { Element, Model, isElement, isEnumDecl, isKind, isModel, isProfile } from './generated/ast.js';
 
 /** Exports kinds/enums as `Name` and `profile.Name`, top-level elements as `Name` and `model.Name`. */
-export class MdslScopeComputation extends DefaultScopeComputation {
+export class ArborScopeComputation extends DefaultScopeComputation {
     protected override addExportedSymbol(node: AstNode, exports: AstNodeDescription[], document: LangiumDocument): void {
         super.addExportedSymbol(node, exports, document);
         const q = qualifiedName(node);
@@ -26,7 +26,7 @@ export class MdslScopeComputation extends DefaultScopeComputation {
     }
 }
 
-export class MdslScopeProvider extends DefaultScopeProvider {
+export class ArborScopeProvider extends DefaultScopeProvider {
     private readonly documents: LangiumDocuments;
     private readonly locator: AstNodeLocator;
 

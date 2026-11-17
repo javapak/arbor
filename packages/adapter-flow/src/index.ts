@@ -9,7 +9,7 @@
  * The output node shape ({ id, type, visual, data }) follows the renderer's
  * DiagramNode. Adjust `SHAPE_TYPE` and `FlowNode` to match the renderer exactly.
  */
-import { IRIndex, type IRDocument, type IRElement } from '@mdsl/ir';
+import { IRIndex, type IRDocument, type IRElement } from '@arbor/ir';
 
 /** Profile `shape` name -> renderer `shapeType` index. */
 export const SHAPE_TYPE: Record<string, number> = {

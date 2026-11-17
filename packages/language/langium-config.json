@@ -1,11 +1,11 @@
 {
-  "projectName": "Mdsl",
+  "projectName": "Arbor",
   "languages": [
     {
-      "id": "mdsl",
-      "grammar": "src/language/mdsl.langium",
-      "fileExtensions": [".mdsl"],
-      "textMate": { "out": "syntaxes/mdsl.tmLanguage.json" }
+      "id": "arbor",
+      "grammar": "src/language/arbor.langium",
+      "fileExtensions": [".arbor"],
+      "textMate": { "out": "syntaxes/arbor.tmLanguage.json" }
     }
   ],
   "out": "src/language/generated"

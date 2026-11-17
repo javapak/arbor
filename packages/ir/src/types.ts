@@ -1,5 +1,5 @@
 /**
- * The mdsl Intermediate Representation (IR).
+ * The arbor Intermediate Representation (IR).
  *
  * This is the hub. Every importer produces it and every emitter consumes it;
  * nothing converts directly from one format to another.
