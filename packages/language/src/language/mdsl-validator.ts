@@ -9,12 +9,13 @@
  * Checks are a fixed set of handlers selected by profile data. Profiles never
  * supply code.
  */
-import type { ValidationAcceptor, ValidationChecks } from 'langium';
+import { AstUtils, type AstNode, type IndexManager, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import type {
     Element, Kind, MdslAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual
 } from './generated/ast.js';
 import { isElement, isListValue, isRefValue } from './generated/ast.js';
 import type { MdslServices } from './mdsl-module.js';
+import type { MdslScopeProvider } from './mdsl-scope.js';
 import {
     allFeatures, bounds, checkLiteral, closest, containmentCandidates,
     elementId, findInheritanceCycle, isA, isRequired
@@ -28,6 +29,7 @@ export const DiagnosticCode = {
     BadDefault: 'MDSL004',
     BadMultiplicity: 'MDSL005',
     UnknownVisualKey: 'MDSL006',
+    AmbiguousName: 'MDSL007',
     // models
     AbstractInstance: 'MDSL101',
     UnknownSlot: 'MDSL102',
@@ -59,10 +61,45 @@ export function registerValidationChecks(services: MdslServices): void {
 }
 
 export class MdslValidator {
+    private readonly scopes: MdslScopeProvider;
+    private readonly index: IndexManager;
+
+    constructor(services: MdslServices) {
+        this.scopes = services.references.ScopeProvider;
+        this.index = services.shared.workspace.IndexManager;
+    }
+
+    /** Profile and model names qualify everything inside them, so they must be unique workspace-wide. */
+    private checkUniqueRoot(root: Profile | Model, accept: ValidationAcceptor): void {
+        const uri = AstUtils.getDocument(root).uri.toString();
+        const other = this.index.allElements(root.$type)
+            .find(d => d.name === root.name && d.type === root.$type && d.documentUri.toString() !== uri);
+        if (other) {
+            accept('error', `Another ${root.$type.toLowerCase()} named '${root.name}' is defined in ${other.documentUri.path.replace(/^\//, '')}.`,
+                { node: root, property: 'name', code: DiagnosticCode.DuplicateName });
+        }
+    }
+
+    /** A simple name that several profiles (or models) define must be qualified. */
+    checkAmbiguousReferences(root: Profile | Model, accept: ValidationAcceptor): void {
+        for (const node of AstUtils.streamAst(root)) {
+            for (const ref of AstUtils.streamReferences(node as AstNode)) {
+                const options = this.scopes.ambiguousTargets(ref, 'ref' in ref.reference ? ref.reference.ref : undefined);
+                if (options.length) {
+                    accept('error',
+                        `'${ref.reference.$refText}' is ambiguous (${options.join(', ')}); write the qualified name.`,
+                        { node: ref.container, property: ref.property, index: ref.index,
+                          code: DiagnosticCode.AmbiguousName, data: { candidates: options } });
+                }
+            }
+        }
+    }
 
     // ================================================================ profiles
 
     checkProfile(profile: Profile, accept: ValidationAcceptor): void {
+        this.checkUniqueRoot(profile, accept);
+        this.checkAmbiguousReferences(profile, accept);
         const seen = new Set<string>();
         for (const decl of [...profile.kinds, ...profile.enums]) {
             if (seen.has(decl.name)) {
@@ -135,6 +172,8 @@ export class MdslValidator {
     // ================================================================ models
 
     checkModel(model: Model, accept: ValidationAcceptor): void {
+        this.checkUniqueRoot(model, accept);
+        this.checkAmbiguousReferences(model, accept);
         const seen = new Map<string, Element>();
         const walk = (els: Element[]) => {
             for (const el of els) {

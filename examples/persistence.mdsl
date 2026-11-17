@@ -4,14 +4,14 @@
 
 profile persistence version "0.1.0" {
 
-    kind Entity extends DataType {
+    kind Entity extends software.DataType {
         prop tableName: string [1]
         prop schema:    string = "public"
         prop readOnly:  bool   = false
         visual { shape: "rectangle" color: "#f59e0b" label: "{name}" icon: "database" }
     }
 
-    kind Column extends Field {
+    kind Column extends software.Field {
         prop columnName: string [0..1]
         prop unique:     bool = false
         prop index:      bool = false

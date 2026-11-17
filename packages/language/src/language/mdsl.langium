@@ -24,7 +24,7 @@ Profile:
 
 Kind:
     (abstract?='abstract')? 'kind' name=ID
-        ('extends' supers+=[Kind:ID] (',' supers+=[Kind:ID])*)?
+        ('extends' supers+=[Kind:QualifiedName] (',' supers+=[Kind:QualifiedName])*)?
     '{'
         (features+=Feature | visuals+=Visual)*
     '}';
@@ -37,15 +37,15 @@ PropFeature:
 
 // contains fields: Field [0..*]
 ContainsFeature:
-    'contains' name=FeatureName ':' target=[Kind:ID] multiplicity=Multiplicity?;
+    'contains' name=FeatureName ':' target=[Kind:QualifiedName] multiplicity=Multiplicity?;
 
 // ref returns: DataType [1]
 RefFeature:
-    'ref' name=FeatureName ':' target=[Kind:ID] multiplicity=Multiplicity?;
+    'ref' name=FeatureName ':' target=[Kind:QualifiedName] multiplicity=Multiplicity?;
 
 TypeRef: PrimitiveTypeRef | EnumTypeRef;
 PrimitiveTypeRef: primitive=('string' | 'int' | 'float' | 'bool');
-EnumTypeRef: enum=[EnumDecl:ID];
+EnumTypeRef: enum=[EnumDecl:QualifiedName];
 
 // [1]  [0..1]  [1..*]  [*]
 Multiplicity:
@@ -74,7 +74,7 @@ Model:
     '}';
 
 Element:
-    kind=[Kind:ID] name=ID ('@' stableId=STRING)? '{'
+    kind=[Kind:QualifiedName] name=ID ('@' stableId=STRING)? '{'
         (slots+=Slot | children+=Element)*
     '}';
 
@@ -82,7 +82,7 @@ Slot:
     name=FeatureName ':' value=Value;
 
 Value: Literal | RefValue | ListValue;
-RefValue: '->' target=[Element:ID];
+RefValue: '->' target=[Element:QualifiedName];
 ListValue: '[' (items+=Value (',' items+=Value)*)? ']';
 
 Literal: StringLit | NumberLit | BoolLit | IdLit;
@@ -90,6 +90,10 @@ StringLit: value=STRING;
 NumberLit: value=NUMBER;
 BoolLit: value=('true' | 'false');
 IdLit: value=ID;   // enum literals
+
+// software.Field, Checkout.OrderApi.placeOrder
+QualifiedName returns string:
+    ID ('.' ID)*;
 
 // Keywords are still allowed as feature/slot names (e.g. `version: "1.0"`).
 FeatureName returns string:

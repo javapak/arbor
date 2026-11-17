@@ -6,10 +6,14 @@ import {
 } from 'langium/lsp';
 import { MdslGeneratedModule, MdslGeneratedSharedModule } from './generated/module.js';
 import { MdslValidator, registerValidationChecks } from './mdsl-validator.js';
+import { MdslScopeComputation, MdslScopeProvider } from './mdsl-scope.js';
 
 export type MdslAddedServices = {
     validation: {
         MdslValidator: MdslValidator;
+    };
+    references: {
+        ScopeProvider: MdslScopeProvider;
     };
 };
 
@@ -17,7 +21,11 @@ export type MdslServices = LangiumServices & MdslAddedServices;
 
 export const MdslModule: Module<MdslServices, PartialLangiumServices & MdslAddedServices> = {
     validation: {
-        MdslValidator: () => new MdslValidator()
+        MdslValidator: (services) => new MdslValidator(services)
+    },
+    references: {
+        ScopeComputation: (services) => new MdslScopeComputation(services),
+        ScopeProvider: (services) => new MdslScopeProvider(services)
     }
 };
 

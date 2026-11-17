@@ -96,9 +96,9 @@ and connect Monaco to it (see Langium's Monaco tutorial).
 
 ## Next steps
 
-- [ ] Qualified-name scoping (`Payments.charge`) and per-profile namespaces, so
-      kind names can repeat across profiles. Today kind and top-level element
-      names are global.
+- [x] Qualified-name scoping (`Payments.charge`) and per-profile namespaces, so
+      kind names can repeat across profiles (`software.Field`). See
+      `packages/language/src/language/mdsl-scope.ts`.
 - [ ] Explicit containment slot syntax for when a child fits several containments.
 - [ ] Formatter (canonical output, so LLM-generated and hand-written text diff cleanly).
 - [ ] Diagram → text edits (CST-range edits from renderer interactions).
