@@ -5,6 +5,7 @@
   "description": "Edit arbor text and its diagram side by side. Embeds webgpu-flow from ../../webgpu-flow.",
   "type": "module",
   "scripts": {
+    
     "dev": "vite",
     "build": "tsc --noEmit -p . && vite build",
     "typecheck": "tsc --noEmit -p .",
