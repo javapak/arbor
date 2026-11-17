@@ -59,7 +59,7 @@ describe('AST -> IR', () => {
         expect(index.isA('persistence.Entity', 'software.Type')).toBe(true);
         const user = index.elements.get('user')!;
         expect(index.get(user, 'schema')).toBe('public');          // default
-        expect(index.visual(user.kind).icon).toBe('database');      // own
+        expect(index.visual(user.kind).tint).toBe(true);           // own
         expect(index.features(user.kind).map(f => f.name)).toContain('fields'); // inherited
     });
 
@@ -71,20 +71,59 @@ describe('AST -> IR', () => {
 });
 
 describe('IR -> flow graph', () => {
-    it('maps containment to nesting and references to edges', async () => {
-        const g = toFlowGraph(await shopIR(), { layout: { user: { x: 10, y: 20 } } });
+    it('produces renderer nodes: position, size and label in data, shape and hex color in visual', async () => {
+        const g = toFlowGraph(await shopIR(), { layout: { user: { x: 10, y: 20, width: 200 } } });
         const user = g.nodes.find(n => n.id === 'user')!;
-        expect(user.visual.position).toEqual({ x: 10, y: 20 });
-        expect(user.visual.icon).toBe('database');
-        expect(user.visual.container).toBe(true);
-        expect(g.nodes.find(n => n.id === 'user.email')!.parentId).toBe('user');
-        expect(g.edges).toContainEqual(expect.objectContaining({ source: 'order.buyer', target: 'user', label: 'type' }));
-        expect(g.nodes.find(n => n.id === 'shop.Checkout')!.visual.shapeType).toBe(4); // package
+        expect(user.data.position).toEqual({ x: 10, y: 20 });
+        expect(user.data.label).toBe('User');
+        expect(user.visual).toMatchObject({ shape: 'rectangle', color: '#f59e0b', container: true });
+        expect(user.visual.visualContent).toMatchObject({ type: 'svg', colorizable: true, size: { width: 64, height: 64 } });
+        expect(user.visual.visualContent!.content).toMatch(/^<svg /);
+        expect(user.visual.size).toEqual({ width: 200, height: 80 });
+        expect(user.data.size).toEqual(user.visual.size);
+        expect(g.nodes.find(n => n.id === 'shop.Checkout')!.visual.shape).toBe('package');
+        expect(g.nodes.find(n => n.id === 'user.email')!.data.parentId).toBe('user');
     });
 
-    it('can render containment as edges instead', async () => {
-        const g = toFlowGraph(await shopIR(), { containment: 'edges' });
-        expect(g.nodes.every(n => n.parentId === null)).toBe(true);
-        expect(g.edges.some(e => e.type === 'containment' && e.target === 'user.email')).toBe(true);
+    it('maps references to arrow edges and containment to composition edges', async () => {
+        const g = toFlowGraph(await shopIR(), { edgeLayout: { 'order.buyer--type->user': [{ x: 5, y: 5 }] } });
+        const ref = g.edges.find(e => e.sourceNodeId === 'order.buyer' && e.targetNodeId === 'user')!;
+        expect(ref.data).toEqual({ label: 'type', relation: 'reference' });
+        expect(ref.style.targetMarker).toBe('open-arrow');
+        expect(ref.userVertices).toEqual([{ x: 5, y: 5 }]);
+        const own = g.edges.find(e => e.sourceNodeId === 'user' && e.targetNodeId === 'user.email')!;
+        expect(own.data).toEqual({ label: 'fields', relation: 'containment' });
+        expect(own.style.sourceMarker).toBe('filled-diamond');
+    });
+
+    it('can hide containment edges', async () => {
+        const g = toFlowGraph(await shopIR(), { containment: 'hidden' });
+        expect(g.edges.every(e => e.data.relation === 'reference')).toBe(true);
+    });
+
+    it('draws an svg or image instead of a shape when no shape is given', async () => {
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: `profile p {
+                kind Actor { visual { svg: "<svg viewBox='0 0 1 1'/>" } }
+                kind Logo  { visual { image: "https://example.com/logo.png" } }
+                kind Badge { visual { icon: "⭐" } }
+            }` },
+            { uri: 'm.arbor', text: 'model m { Actor a {} Logo l {} Badge b {} }' }
+        ]);
+        expect(r.diagnostics).toEqual([]);
+        const [a, l, b] = toFlowGraph(r.ir).nodes;
+        expect(a.visual).toMatchObject({ shape: 'none', visualContent: { type: 'svg', content: "<svg viewBox='0 0 1 1'/>" } });
+        expect(a.visual.visualContent!.colorizable).toBeUndefined();
+        expect(l.visual).toMatchObject({ shape: 'none', visualContent: { type: 'image' } });
+        expect(b.visual).toMatchObject({ shape: 'rectangle', icon: '⭐' });
+        expect(b.visual.visualContent).toBeUndefined();
+    });
+
+    it('falls back to rectangle for shapes the renderer does not draw', async () => {
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: 'profile p { kind K { visual { shape: "blob" } } }' },
+            { uri: 'm.arbor', text: 'model m { K k {} }' }
+        ]);
+        expect(toFlowGraph(r.ir).nodes[0].visual.shape).toBe('rectangle');
     });
 });

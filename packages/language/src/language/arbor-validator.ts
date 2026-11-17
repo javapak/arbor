@@ -14,11 +14,12 @@ import type {
     Element, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual
 } from './generated/ast.js';
 import { isElement, isListValue, isRefValue } from './generated/ast.js';
+import { VISUAL_KEYS, checkVisualValue, isVisualKey, type VisualKeySpec } from '@arbor/ir';
 import type { ArborServices } from './arbor-module.js';
 import type { ArborScopeProvider } from './arbor-scope.js';
 import {
     allFeatures, bounds, checkLiteral, closest, containmentCandidates,
-    elementId, findInheritanceCycle, isA, isRequired
+    elementId, findInheritanceCycle, isA, isRequired, literalValue
 } from './semantics.js';
 
 export const DiagnosticCode = {
@@ -30,6 +31,7 @@ export const DiagnosticCode = {
     BadMultiplicity: 'ARB005',
     UnknownVisualKey: 'ARB006',
     AmbiguousName: 'ARB007',
+    BadVisualValue: 'ARB008',
     // models
     AbstractInstance: 'ARB101',
     UnknownSlot: 'ARB102',
@@ -41,9 +43,6 @@ export const DiagnosticCode = {
     DuplicateSlot: 'ARB108',
     DuplicateId: 'ARB110'
 } as const;
-
-/** Keys the flow adapter understands. Others are allowed but warned about. */
-export const KNOWN_VISUAL_KEYS = ['shape', 'color', 'icon', 'label', 'width', 'height', 'container'];
 
 export function registerValidationChecks(services: ArborServices): void {
     const registry = services.validation.ValidationRegistry;
@@ -158,13 +157,24 @@ export class ArborValidator {
         }
     }
 
+    /** Keys and values come from the IR's renderer-neutral visual vocabulary. Unknown ones are warnings. */
     checkVisual(visual: Visual, accept: ValidationAcceptor): void {
         for (const e of visual.entries) {
-            if (!KNOWN_VISUAL_KEYS.includes(e.key)) {
-                const fix = closest(e.key, KNOWN_VISUAL_KEYS);
+            if (!isVisualKey(e.key)) {
+                const fix = closest(e.key, Object.keys(VISUAL_KEYS));
                 accept('warning',
                     `Unknown visual key '${e.key}'.${fix ? ` Did you mean '${fix}'?` : ''}`,
                     { node: e, property: 'key', code: DiagnosticCode.UnknownVisualKey, data: { fix } });
+                continue;
+            }
+            const value = literalValue(e.value);
+            const problem = checkVisualValue(e.key, value);
+            if (problem) {
+                const spec: VisualKeySpec = VISUAL_KEYS[e.key];
+                const fix = spec.values && typeof value === 'string' ? closest(value, spec.values) : undefined;
+                accept('warning',
+                    `Visual '${e.key}': ${problem}.${fix ? ` Did you mean '${fix}'?` : ''}`,
+                    { node: e, property: 'value', code: DiagnosticCode.BadVisualValue, data: { fix } });
             }
         }
     }

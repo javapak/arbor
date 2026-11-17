@@ -83,6 +83,18 @@ describe('profile validation', () => {
         expect(d?.fix).toBe('color');
     });
 
+    it('checks visual values against the IR vocabulary', async () => {
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: `profile p { kind A { visual {
+            shape: "rectangel"  color: "blue"  tint: "yes"  svg: "<path/>"  width: 120
+        } } }` }]);
+        const bad = r.diagnostics.filter(x => x.code === C.BadVisualValue);
+        expect(bad.map(d => d.severity)).toEqual(['warning', 'warning', 'warning', 'warning']);
+        expect(bad[0].fix).toBe('rectangle');
+        expect(bad.map(d => d.message.split(':')[0])).toEqual([
+            "Visual 'shape'", "Visual 'color'", "Visual 'tint'", "Visual 'svg'"
+        ]);
+    });
+
     it('bad multiplicity', async () => {
         const r = await loadWorkspace([{ uri: 'p.arbor', text: 'profile p { kind A { prop n: int [3..1] } }' }]);
         expect(codes(r)).toContain(C.BadMultiplicity);

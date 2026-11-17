@@ -31,7 +31,7 @@ runtime with no TypeScript compiler API and no `eval`.
 
 | Package | Depends on | Purpose |
 |---|---|---|
-| `@arbor/ir` | nothing | IR types, JSON Schema, `IRIndex` read helpers (inheritance, defaults, visuals) |
+| `@arbor/ir` | nothing | IR types, JSON Schema, `IRIndex` read helpers (inheritance, defaults, visuals), and the renderer-neutral visual vocabulary (`VISUAL_KEYS`) |
 | `@arbor/adapter-flow` | `@arbor/ir` | IR → `{ nodes, edges }` for the renderer, with layout from a sidecar |
 | `@arbor/language` | Langium, the two above | grammar, validator, AST → IR, CLI, LSP entry points (Node + web worker) |
 
@@ -74,13 +74,23 @@ import { loadWorkspace } from '@arbor/language';
 import { toFlowGraph } from '@arbor/adapter-flow';
 
 const { ir, diagnostics } = await loadWorkspace([{ uri: 'shop.arbor', text }, /* profiles */]);
-const { nodes, edges } = toFlowGraph(ir, { layout: savedLayout, containment: 'nest' });
+const { nodes, edges } = toFlowGraph(ir, { layout: savedLayout, edgeLayout: savedBends });
+// nodes: DiagramNode[], edges: DiagramEdge[] for webgpu-flow
 ```
 
-`SHAPE_TYPE` and `FlowNode` in `packages/adapter-flow/src/index.ts` are a best
-guess at the renderer's `DiagramNode`/`shapeType`; align them with the real types.
-Layout is a sidecar (`element ID → { x, y, width?, height? }`) owned by the
-renderer, so text never carries coordinates.
+`FlowNode`/`FlowEdge` in `packages/adapter-flow/src/index.ts` mirror
+[webgpu-flow](https://github.com/javapak/webgpu-flow)'s `DiagramNode`/`DiagramEdge`
+(`src/types/index.ts`), and `SHAPES`/`MarkerType` mirror its `SHAPE_TYPES` and
+`MarkerType`; keep them in step when the renderer changes. The renderer has no
+nesting, so containment is drawn as composition edges (filled diamond at the
+owner; `containment: 'hidden'` drops them) and references as open arrows.
+Kinds can use a built-in SDF shape or their own `svg`/`image` (see
+[docs/LANGUAGE.md](docs/LANGUAGE.md)).
+
+Layout is a pair of sidecars owned by the renderer (`element ID → { x, y, width?, height? }`
+and `edge ID → bend points`), so text never carries coordinates. For local
+work, clone webgpu-flow into `webgpu-flow/` at the repo root; it is git- and
+lint-ignored.
 
 For the editor, bundle `packages/language/out/main-browser.js` as a web worker
 and connect Monaco to it (see Langium's Monaco tutorial).

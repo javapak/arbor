@@ -34,7 +34,11 @@ profile persistence version "0.1.0" {
 - A property with a default is never required.
 - `extends` takes one or more kinds; features and visuals inherit, and the nearest definition wins.
 - Names from another profile can be qualified: `extends software.DataType`, `ref owner: org.Team`. A profile's own names always win inside it, but a bare name from elsewhere breaks as soon as a second profile defines the same name, so **always qualify names from other profiles**.
-- Visual keys: `shape` (`rectangle|circle|diamond|hexagon|package`), `color` (hex), `icon`, `label` (`{name}`, `{kind}`), `width`, `height`, `container`.
+- Visual keys:
+  - `shape`: `rectangle`, `roundedRectangle`, `circle`, `oval`, `diamond`, `hexagon`, `package`, `actor`, `initialNode`, `finalNode`, `none`. Unknown shapes draw as `rectangle`.
+  - `svg`: inline SVG markup (use single quotes inside it). `image`: an image URL. Without a `shape` the SVG or image *is* the node; with one, it is drawn on the shape. `tint: true` colors an SVG with the node `color`.
+  - `icon`: an emoji drawn on the node.
+  - `color`, `labelColor`, `iconColor` (hex), `label` (`{name}`, `{kind}`), `width`, `height`, `container`.
 
 ## Models
 
@@ -80,6 +84,7 @@ Every element has the same shape:
 | ARB005 | bad multiplicity |
 | ARB006 | unknown visual key (warning) |
 | ARB007 | simple name defined by several profiles (or models); write the qualified name listed in the message |
+| ARB008 | visual value doesn't fit its key, e.g. unknown shape or non-hex color (warning; `fix` = closest shape) |
 | ARB101 | abstract kind instantiated |
 | ARB102 | unknown slot (`fix` = closest feature) |
 | ARB103 | value has the wrong type |
