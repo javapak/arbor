@@ -96,6 +96,19 @@ describe('IR -> flow graph', () => {
         expect(own.style.sourceMarker).toBe('filled-diamond');
     });
 
+    it('is a complete webgpu-flow diagram file with a palette of instantiable kinds', async () => {
+        const g = toFlowGraph(await shopIR());
+        expect(g).toMatchObject({ format: 'webgpu-flow/diagram', version: 1 });
+        const ids = g.palette!.map(t => t.id);
+        expect(ids).toContain('persistence.Entity');
+        expect(ids).not.toContain('software.NamedElement');   // abstract
+        const entity = g.palette!.find(t => t.id === 'persistence.Entity')!;
+        expect(entity).toMatchObject({ label: 'Entity', group: 'persistence', type: 'Entity', data: { kind: 'persistence.Entity' } });
+        const user = g.nodes.find(n => n.id === 'user')!;
+        expect(entity.visual).toEqual({ ...user.visual, container: false });   // same look as generated nodes
+        expect(toFlowGraph(await shopIR(), { palette: false }).palette).toBeUndefined();
+    });
+
     it('can hide containment edges', async () => {
         const g = toFlowGraph(await shopIR(), { containment: 'hidden' });
         expect(g.edges.every(e => e.data.relation === 'reference')).toBe(true);

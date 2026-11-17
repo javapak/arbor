@@ -89,7 +89,24 @@ export interface FlowEdge {
     };
 }
 
-export interface FlowGraph { nodes: FlowNode[]; edges: FlowEdge[] }
+/** A palette entry: one per instantiable kind. Mirrors `NodeTemplate` in webgpu-flow/src/utils/NodeTemplates.ts. */
+export interface FlowTemplate {
+    id: string;                 // kind ID, e.g. "persistence.Entity"
+    label: string;              // kind name
+    group: string;              // profile name
+    type: string;               // kind name, like FlowNode.type
+    visual: FlowNode['visual'];
+    data: { kind: string };
+}
+
+/** A complete webgpu-flow diagram file (its `DiagramDocument`, format version 1). */
+export interface FlowGraph {
+    format: 'webgpu-flow/diagram';
+    version: 1;
+    nodes: FlowNode[];
+    edges: FlowEdge[];
+    palette?: FlowTemplate[];
+}
 
 export interface FlowOptions {
     layout?: Layout;
@@ -99,6 +116,8 @@ export interface FlowOptions {
     defaultSize?: { width: number; height: number };
     /** Raster size for `svg` / `image` visuals. */
     contentSize?: number;
+    /** Offer every non-abstract kind of the document's profiles in the editor's palette (default true). */
+    palette?: boolean;
 }
 
 const REFERENCE_STYLE: FlowEdge['style'] = { color: [0.39, 0.45, 0.55, 1], thickness: 2, targetMarker: 'open-arrow' };
@@ -125,7 +144,6 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
     for (const model of doc.models) {
         for (const el of model.elements) {
             const v = index.visual(el.kind);
-            const content = visualContentOf(v, contentSize);
             const kind = index.kinds.get(el.kind);
             const pos = layout[el.id] ?? autoPlace(i++, defaultSize);
             const size = {
@@ -144,16 +162,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                     parentId: el.parent,
                     properties: el.properties
                 },
-                visual: {
-                    shape: content && v.shape === undefined ? 'none' : shapeOf(v.shape),
-                    color: str(v.color) ?? '#64748b',
-                    size: { ...size },
-                    ...(str(v.labelColor) ? { labelColor: str(v.labelColor) } : {}),
-                    ...(str(v.iconColor) ? { iconColor: str(v.iconColor) } : {}),
-                    ...(str(v.icon) ? { icon: str(v.icon) } : {}),
-                    ...(content ? { visualContent: content } : {}),
-                    container: v.container === true || el.children.length > 0
-                }
+                visual: { ...kindVisual(v, size, contentSize), container: v.container === true || el.children.length > 0 }
             });
 
             for (const [feature, targets] of Object.entries(el.references)) {
@@ -165,7 +174,31 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
             }
         }
     }
-    return { nodes, edges };
+
+    const palette = opts.palette === false ? undefined : doc.profiles.flatMap(p => p.kinds.filter(k => !k.abstract).map((k): FlowTemplate => {
+        const v = index.visual(k.id);
+        const size = { width: num(v.width) ?? defaultSize.width, height: num(v.height) ?? defaultSize.height };
+        return {
+            id: k.id, label: k.name, group: p.name, type: k.name,
+            visual: { ...kindVisual(v, size, contentSize), container: v.container === true },
+            data: { kind: k.id }
+        };
+    }));
+    return { format: 'webgpu-flow/diagram', version: 1, nodes, edges, ...(palette ? { palette } : {}) };
+}
+
+/** A kind's resolved visuals as renderer visuals. Shared by nodes and palette entries so they look the same. */
+function kindVisual(v: Record<string, IRScalar>, size: { width: number; height: number }, contentSize: number): Omit<FlowNode['visual'], 'container'> {
+    const content = visualContentOf(v, contentSize);
+    return {
+        shape: content && v.shape === undefined ? 'none' : shapeOf(v.shape),
+        color: str(v.color) ?? '#64748b',
+        size: { ...size },
+        ...(str(v.labelColor) ? { labelColor: str(v.labelColor) } : {}),
+        ...(str(v.iconColor) ? { iconColor: str(v.iconColor) } : {}),
+        ...(str(v.icon) ? { icon: str(v.icon) } : {}),
+        ...(content ? { visualContent: content } : {})
+    };
 }
 
 /** `label` in the profile may use {name} and {kind}. Plain substitution; no evaluation. */
