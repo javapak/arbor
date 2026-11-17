@@ -1,0 +1,41 @@
+// A model (M1). Every element has the same shape:
+//   <Kind> <Name> (@"stable-id")? { slot: value ... nested elements ... }
+
+model shop {
+
+    Primitive UUID   { builtin: uuid }
+    Primitive Text   { builtin: text }
+    Primitive Money  { builtin: decimal }
+
+    Entity User @"user" {
+        tableName: "users"
+        description: "A registered customer"
+
+        Column id    { type: -> UUID  unique: true }
+        Column email { type: -> Text  unique: true  index: true }
+    }
+
+    Entity Order @"order" {
+        tableName: "orders"
+
+        Column id    { type: -> UUID }
+        Column buyer { type: -> User  onDelete: cascade }
+        Column total { type: -> Money }
+    }
+
+    Component Checkout {
+        requires: [-> Payments]
+
+        Interface OrderApi {
+            Operation placeOrder {
+                returns: -> Order
+                Parameter buyer { type: -> User }
+            }
+            Operation streamStatus { style: stream  returns: -> Order }
+        }
+    }
+
+    Interface Payments {
+        Operation charge { style: async  returns: -> Money }
+    }
+}

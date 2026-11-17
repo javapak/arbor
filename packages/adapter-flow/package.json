@@ -1,0 +1,12 @@
+{
+  "name": "@mdsl/adapter-flow",
+  "version": "0.1.0",
+  "description": "Emitter: mdsl IR -> nodes/edges for the WebGPU flow renderer. Depends only on the IR.",
+  "type": "module",
+  "main": "out/index.js",
+  "types": "out/index.d.ts",
+  "exports": { ".": "./out/index.js" },
+  "dependencies": {
+    "@mdsl/ir": "0.1.0"
+  }
+}

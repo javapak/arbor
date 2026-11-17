@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mdsl.dev/schema/ir/0.1.0",
+  "title": "mdsl IR",
+  "description": "The hub format. Mirrors packages/ir/src/types.ts; keep them in sync.",
+  "type": "object",
+  "required": ["irVersion", "profiles", "models"],
+  "additionalProperties": false,
+  "properties": {
+    "irVersion": { "type": "string" },
+    "profiles": { "type": "array", "items": { "$ref": "#/$defs/profile" } },
+    "models": { "type": "array", "items": { "$ref": "#/$defs/model" } }
+  },
+  "$defs": {
+    "scalar": { "type": ["string", "number", "boolean"] },
+    "multiplicity": {
+      "type": "object",
+      "required": ["lower", "upper"],
+      "additionalProperties": false,
+      "properties": {
+        "lower": { "type": "integer", "minimum": 0 },
+        "upper": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "required": ["name", "kinds", "enums"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "kinds": { "type": "array", "items": { "$ref": "#/$defs/kind" } },
+        "enums": { "type": "array", "items": { "$ref": "#/$defs/enum" } }
+      }
+    },
+    "enum": {
+      "type": "object",
+      "required": ["id", "name", "literals"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "literals": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "kind": {
+      "type": "object",
+      "required": ["id", "name", "abstract", "extends", "features", "visual"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "abstract": { "type": "boolean" },
+        "extends": { "type": "array", "items": { "type": "string" } },
+        "features": { "type": "array", "items": { "$ref": "#/$defs/feature" } },
+        "visual": { "type": "object", "additionalProperties": { "$ref": "#/$defs/scalar" } }
+      }
+    },
+    "feature": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["feature", "name", "type", "multiplicity"],
+          "additionalProperties": false,
+          "properties": {
+            "feature": { "const": "property" },
+            "name": { "type": "string" },
+            "type": {
+              "oneOf": [
+                { "enum": ["string", "int", "float", "bool"] },
+                {
+                  "type": "object",
+                  "required": ["enum"],
+                  "additionalProperties": false,
+                  "properties": { "enum": { "type": "string" } }
+                }
+              ]
+            },
+            "multiplicity": { "$ref": "#/$defs/multiplicity" },
+            "default": { "$ref": "#/$defs/scalar" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["feature", "name", "target", "multiplicity"],
+          "additionalProperties": false,
+          "properties": {
+            "feature": { "enum": ["contains", "ref"] },
+            "name": { "type": "string" },
+            "target": { "type": "string" },
+            "multiplicity": { "$ref": "#/$defs/multiplicity" }
+          }
+        }
+      ]
+    },
+    "model": {
+      "type": "object",
+      "required": ["name", "elements"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "elements": { "type": "array", "items": { "$ref": "#/$defs/element" } }
+      }
+    },
+    "element": {
+      "type": "object",
+      "required": ["id", "name", "kind", "parent", "containedIn", "children", "properties", "references"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "kind": { "type": "string" },
+        "parent": { "type": ["string", "null"] },
+        "containedIn": { "type": ["string", "null"] },
+        "children": { "type": "array", "items": { "type": "string" } },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "$ref": "#/$defs/scalar" },
+              { "type": "array", "items": { "$ref": "#/$defs/scalar" } }
+            ]
+          }
+        },
+        "references": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

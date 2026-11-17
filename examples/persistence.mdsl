@@ -1,0 +1,22 @@
+// A domain profile layered on the core. This is what a UML profile with
+// stereotypes was trying to be, except an Entity *is* a DataType with its own
+// properties in one place. No tagged values, no split representation.
+
+profile persistence version "0.1.0" {
+
+    kind Entity extends DataType {
+        prop tableName: string [1]
+        prop schema:    string = "public"
+        prop readOnly:  bool   = false
+        visual { shape: "rectangle" color: "#f59e0b" label: "{name}" icon: "database" }
+    }
+
+    kind Column extends Field {
+        prop columnName: string [0..1]
+        prop unique:     bool = false
+        prop index:      bool = false
+        prop onDelete:   OnDeleteAction = restrict
+    }
+
+    enum OnDeleteAction { cascade, setNull, restrict, noAction }
+}

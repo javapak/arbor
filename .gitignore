@@ -1,0 +1,5 @@
+node_modules/
+out/
+*.tsbuildinfo
+packages/language/src/language/generated/
+packages/language/syntaxes/

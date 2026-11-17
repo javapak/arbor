@@ -1,0 +1,155 @@
+/**
+ * Importer: Langium AST -> IR. The only place that knows both.
+ *
+ * Runs on already-validated documents. Unresolved references are dropped
+ * rather than thrown on, so a partially broken workspace still produces a
+ * renderable IR.
+ */
+import {
+    IR_VERSION,
+    type IRDocument, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile,
+    type IRScalar, type IRValue
+} from '@mdsl/ir';
+import type { Element, Feature, Kind, Model, Profile, Value } from '../language/generated/ast.js';
+import { isListValue, isModel, isProfile, isRefValue } from '../language/generated/ast.js';
+import {
+    allFeatures, bounds, containmentCandidates, elementId, enumId, kindId, literalValue
+} from '../language/semantics.js';
+
+export function toIR(roots: Array<Profile | Model>): IRDocument {
+    const profiles = roots.filter(isProfile).map(profileToIR);
+    const models = roots.filter(isModel).map(modelToIR);
+
+    // Self-describing: include every profile a model actually uses, even if
+    // the caller only passed the model.
+    const have = new Set(profiles.map(p => p.name));
+    for (const m of roots.filter(isModel)) {
+        for (const kind of kindsUsed(m)) {
+            const p = kind.$container;
+            if (!have.has(p.name)) { have.add(p.name); profiles.push(profileToIR(p)); }
+        }
+    }
+    return { irVersion: IR_VERSION, profiles, models };
+}
+
+// ------------------------------------------------------------ profiles
+
+function profileToIR(p: Profile): IRProfile {
+    return {
+        name: p.name,
+        ...(p.version ? { version: p.version } : {}),
+        kinds: p.kinds.map(kindToIR),
+        enums: p.enums.map(e => ({ id: enumId(e), name: e.name, literals: e.literals.map(l => l.name) }))
+    };
+}
+
+function kindToIR(k: Kind): IRKind {
+    const visual: Record<string, IRScalar> = {};
+    for (const v of k.visuals) for (const e of v.entries) visual[e.key] = literalValue(e.value);
+    return {
+        id: kindId(k),
+        name: k.name,
+        abstract: k.abstract,
+        extends: k.supers.flatMap(s => (s.ref ? [kindId(s.ref)] : [])),
+        features: k.features.flatMap(featureToIR),
+        visual
+    };
+}
+
+function featureToIR(f: Feature): IRFeature[] {
+    const multiplicity = bounds(f.multiplicity, f.$type);
+    switch (f.$type) {
+        case 'PropFeature': {
+            const type = f.type.$type === 'PrimitiveTypeRef'
+                ? f.type.primitive
+                : f.type.enum.ref ? { enum: enumId(f.type.enum.ref) } : undefined;
+            if (!type) return [];
+            return [{
+                feature: 'property', name: f.name, type, multiplicity,
+                ...(f.default ? { default: literalValue(f.default) } : {})
+            }];
+        }
+        case 'ContainsFeature':
+        case 'RefFeature':
+            if (!f.target.ref) return [];
+            return [{
+                feature: f.$type === 'ContainsFeature' ? 'contains' : 'ref',
+                name: f.name, target: kindId(f.target.ref), multiplicity
+            }];
+    }
+}
+
+// ------------------------------------------------------------ models
+
+function modelToIR(m: Model): IRModel {
+    const elements: IRElement[] = [];
+    const visit = (el: Element, parent: IRElement | null) => {
+        const kind = el.kind.ref;
+        if (!kind) return;
+        const features = allFeatures(kind);
+        const ir: IRElement = {
+            id: elementId(el),
+            name: el.name,
+            kind: kindId(kind),
+            parent: parent?.id ?? null,
+            containedIn: null,
+            children: [],
+            properties: {},
+            references: {}
+        };
+        if (parent) {
+            const parentKind = el.$container.$type === 'Element' ? el.$container.kind.ref : undefined;
+            const c = parentKind ? containmentCandidates(parentKind, kind) : [];
+            ir.containedIn = c.length === 1 ? c[0].name : null;
+            parent.children.push(ir.id);
+        }
+        for (const slot of el.slots) {
+            const f = features.get(slot.name);
+            if (!f || f.$type === 'ContainsFeature') continue;
+            if (f.$type === 'RefFeature') {
+                ir.references[slot.name] = refTargets(slot.value);
+            } else {
+                const v = scalarValue(slot.value);
+                if (v !== undefined) ir.properties[slot.name] = v;
+            }
+        }
+        elements.push(ir);
+        for (const child of el.children) visit(child, ir);
+    };
+    for (const el of m.elements) visit(el, null);
+    return { name: m.name, elements };
+}
+
+function refTargets(v: Value): string[] {
+    const items = isListValue(v) ? v.items : [v];
+    return items.flatMap(i => (isRefValue(i) && i.target.ref ? [elementId(i.target.ref)] : []));
+}
+
+function scalarValue(v: Value): IRValue | undefined {
+    if (isRefValue(v)) return undefined;
+    if (isListValue(v)) {
+        return v.items.flatMap(i => (isRefValue(i) || isListValue(i) ? [] : [literalValue(i)]));
+    }
+    return literalValue(v);
+}
+
+function kindsUsed(m: Model): Kind[] {
+    const out = new Set<Kind>();
+    const walk = (els: Element[]) => {
+        for (const el of els) {
+            const k = el.kind.ref;
+            if (k) {
+                out.add(k);
+                // ancestors may live in other profiles
+                const stack = [k];
+                while (stack.length) {
+                    const cur = stack.pop()!;
+                    for (const s of cur.supers) if (s.ref && !out.has(s.ref)) { out.add(s.ref); stack.push(s.ref); }
+                }
+            }
+            walk(el.children);
+        }
+    };
+    walk(m.elements);
+    return [...out];
+}

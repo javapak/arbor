@@ -1,0 +1,52 @@
+// Core software profile: the standard library.
+// Domain profiles extend these kinds; emitters target them, so anything that
+// extends a core kind gets generation for free.
+
+profile software version "0.1.0" {
+
+    abstract kind NamedElement {
+        prop description: string [0..1]
+    }
+
+    abstract kind Type extends NamedElement {}
+
+    kind DataType extends Type {
+        contains fields: Field [0..*]
+        visual { shape: "rectangle" color: "#0ea5e9" label: "«{kind}» {name}" }
+    }
+
+    kind Field extends NamedElement {
+        ref  type:     Type [1]
+        prop optional: bool = false
+        prop many:     bool = false
+    }
+
+    kind Component extends NamedElement {
+        contains provides: Interface [0..*]
+        ref      requires: Interface [0..*]
+        visual { shape: "package" color: "#6366f1" container: true }
+    }
+
+    kind Interface extends Type {
+        contains operations: Operation [0..*]
+        visual { shape: "circle" color: "#22c55e" }
+    }
+
+    kind Operation extends NamedElement {
+        contains params:  Parameter [0..*]
+        ref      returns: Type [0..1]
+        prop     style:   OperationStyle = sync
+    }
+
+    kind Parameter extends NamedElement {
+        ref type: Type [1]
+    }
+
+    kind Primitive extends Type {
+        prop builtin: Builtin
+        visual { shape: "diamond" color: "#94a3b8" }
+    }
+
+    enum OperationStyle { sync, async, stream }
+    enum Builtin { text, integer, decimal, boolean, date, uuid }
+}

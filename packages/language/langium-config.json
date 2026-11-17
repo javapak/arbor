@@ -1,0 +1,12 @@
+{
+  "projectName": "Mdsl",
+  "languages": [
+    {
+      "id": "mdsl",
+      "grammar": "src/language/mdsl.langium",
+      "fileExtensions": [".mdsl"],
+      "textMate": { "out": "syntaxes/mdsl.tmLanguage.json" }
+    }
+  ],
+  "out": "src/language/generated"
+}
