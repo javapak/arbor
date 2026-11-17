@@ -3,3 +3,6 @@ out/
 *.tsbuildinfo
 packages/language/src/language/generated/
 packages/language/syntaxes/
+
+# Separate repo (WebGPU flow renderer), cloned alongside for local integration
+webgpu-flow/
