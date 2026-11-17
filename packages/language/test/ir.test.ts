@@ -109,6 +109,19 @@ describe('IR -> flow graph', () => {
         expect(toFlowGraph(await shopIR(), { palette: false }).palette).toBeUndefined();
     });
 
+    it('auto-places elements without a layout entry in free grid cells', async () => {
+        const plain = toFlowGraph(await shopIR());
+        const first = plain.nodes[0], second = plain.nodes[1];
+        // Pin the second element where the first would go: the first moves on to a free cell.
+        const g = toFlowGraph(await shopIR(), { layout: { [second.id]: { ...first.data.position } } });
+        const a = g.nodes.find(n => n.id === first.id)!.data.position;
+        const b = g.nodes.find(n => n.id === second.id)!.data.position;
+        expect(b).toEqual(first.data.position);
+        expect(a).not.toEqual(b);
+        const all = g.nodes.map(n => `${n.data.position.x},${n.data.position.y}`);
+        expect(new Set(all).size).toBe(all.length);
+    });
+
     it('can hide containment edges', async () => {
         const g = toFlowGraph(await shopIR(), { containment: 'hidden' });
         expect(g.edges.every(e => e.data.relation === 'reference')).toBe(true);

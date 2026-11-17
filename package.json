@@ -5,7 +5,8 @@
   "workspaces": [
     "packages/ir",
     "packages/language",
-    "packages/adapter-flow"
+    "packages/adapter-flow",
+    "apps/studio"
   ],
   "scripts": {
     "generate": "npm run generate -w @arbor/language",
@@ -14,7 +15,8 @@
     "lint": "eslint .",
     "ir": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js ir",
     "flow": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js flow",
-    "check": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js check"
+    "check": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js check",
+    "studio": "npm run build && npm run dev -w @arbor/studio"
   },
   "devDependencies": {
     "@cfworker/json-schema": "^4.1.6",
@@ -26,6 +28,8 @@
     "vitest": "^4.1.12"
   },
   "allowScripts": {
-    "fsevents@2.3.3": true
+    "fsevents@2.3.3": true,
+    "esbuild@0.28.2": true,
+    "@swc/core@1.16.22": true
   }
 }

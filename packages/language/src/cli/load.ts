@@ -30,7 +30,8 @@ export interface LoadResult {
 
 const SEVERITY = ['error', 'error', 'warning', 'info', 'hint'] as const;
 
-export async function loadWorkspace(sources: Source[]): Promise<LoadResult> {
+/** Parses, links and validates `sources` together; one document per source, in order. */
+export async function buildDocuments(sources: Source[]): Promise<LangiumDocument<Document>[]> {
     const { shared } = createArborServices(EmptyFileSystem);
     const factory = shared.workspace.LangiumDocumentFactory;
     const docs: LangiumDocument<Document>[] = sources.map(s => {
@@ -39,6 +40,11 @@ export async function loadWorkspace(sources: Source[]): Promise<LoadResult> {
         return doc;
     });
     await shared.workspace.DocumentBuilder.build(docs, { validation: true });
+    return docs;
+}
+
+export async function loadWorkspace(sources: Source[]): Promise<LoadResult> {
+    const docs = await buildDocuments(sources);
 
     const diagnostics: StructuredDiagnostic[] = docs.flatMap((doc, i) =>
         (doc.diagnostics ?? []).map(d => ({

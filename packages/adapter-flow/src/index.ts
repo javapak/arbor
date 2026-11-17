@@ -140,12 +140,12 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
             data: { label, relation }
         });
 
-    let i = 0;
+    const place = autoPlacer(doc, layout, index, defaultSize);
     for (const model of doc.models) {
         for (const el of model.elements) {
             const v = index.visual(el.kind);
             const kind = index.kinds.get(el.kind);
-            const pos = layout[el.id] ?? autoPlace(i++, defaultSize);
+            const pos = layout[el.id] ?? place(el);
             const size = {
                 width: pos.width ?? num(v.width) ?? defaultSize.width,
                 height: pos.height ?? num(v.height) ?? defaultSize.height
@@ -220,9 +220,35 @@ function shapeOf(v: IRScalar | undefined): Shape {
     return (VISUAL_SHAPES as readonly unknown[]).includes(v) ? SHAPES[v as VisualShape] : 'rectangle';
 }
 
-function autoPlace(i: number, size: { width: number; height: number }): LayoutEntry {
-    const cols = 6;
-    return { x: (i % cols) * (size.width + 40), y: Math.floor(i / cols) * (size.height + 40) };
+/**
+ * Places elements the layout doesn't position on a grid, in model order,
+ * skipping cells that overlap elements it does position.
+ */
+function autoPlacer(doc: IRDocument, layout: Layout, index: IRIndex, size: { width: number; height: number }) {
+    const cols = 6, gap = 40;
+    const sizeOf = (el: IRElement, entry?: LayoutEntry) => {
+        const v = index.visual(el.kind);
+        return { width: entry?.width ?? num(v.width) ?? size.width, height: entry?.height ?? num(v.height) ?? size.height };
+    };
+    // Nodes are positioned by their centre (as the renderer does), so keep rectangles centred too.
+    const taken = doc.models.flatMap(m => m.elements).flatMap(el => {
+        const entry = layout[el.id];
+        return entry ? [{ x: entry.x, y: entry.y, ...sizeOf(el, entry) }] : [];
+    });
+    const free = (x: number, y: number, w: number, h: number) =>
+        !taken.some(r => Math.abs(r.x - x) * 2 < r.width + w && Math.abs(r.y - y) * 2 < r.height + h);
+    let cell = 0;
+    return (el: IRElement): LayoutEntry => {
+        const { width, height } = sizeOf(el);
+        for (;; cell++) {
+            const x = (cell % cols) * (size.width + gap), y = Math.floor(cell / cols) * (size.height + gap);
+            if (free(x, y, width, height)) {
+                taken.push({ x, y, width, height });
+                cell++;
+                return { x, y };
+            }
+        }
+    };
 }
 
 function num(v: unknown): number | undefined {

@@ -92,8 +92,33 @@ and `edge ID → bend points`), so text never carries coordinates. For local
 work, clone webgpu-flow into `webgpu-flow/` at the repo root; it is git- and
 lint-ignored.
 
-For the editor, bundle `packages/language/out/main-browser.js` as a web worker
-and connect Monaco to it (see Langium's Monaco tutorial).
+## Studio
+
+`apps/studio` puts the text and the diagram side by side:
+
+```bash
+npm run studio      # builds the packages, then serves http://localhost:5173
+```
+
+It needs the webgpu-flow clone in `webgpu-flow/` (imported from source through a
+Vite alias) and a WebGPU-capable browser.
+
+- **Text → diagram:** every text change re-parses the workspace and redraws the
+  diagram from the IR. Diagnostics show inline and in the problems list.
+- **Diagram → text:** adding a node from the palette inserts an empty element of
+  that kind (`planAddElement`); deleting a node removes its element
+  (`planRemoveElement`). Both live in `@arbor/language`, so the studio never
+  handles syntax.
+- **Layout:** moves, resizes and bend points go to the layout sidecars, never the
+  text. Elements without a position are placed in free grid cells.
+- **Not written to text yet:** drawing or deleting edges, and label/colour edits.
+  The studio says so and redraws from the text.
+- Files and layout autosave to the browser's local storage; "Reset to examples"
+  starts over.
+
+The editor is CodeMirror with a highlighting-only grammar. Langium's language
+server (`packages/language/out/main-browser.js` in a web worker) can replace the
+direct `loadWorkspace` calls once completion and go-to-definition are wanted.
 
 ## Decisions so far
 
@@ -111,7 +136,8 @@ and connect Monaco to it (see Langium's Monaco tutorial).
       `packages/language/src/language/arbor-scope.ts`.
 - [ ] Explicit containment slot syntax for when a child fits several containments.
 - [ ] Formatter (canonical output, so LLM-generated and hand-written text diff cleanly).
-- [ ] Diagram → text edits (CST-range edits from renderer interactions).
+- [ ] Diagram → text edits: adding and removing elements done (studio);
+      edges → reference slots and nested drops → containment still to do.
 - [ ] First real emitter targeting core kinds (JSON Schema from `DataType`/`Field`).
 - [ ] Profile → JSON Schema for dynamic forms.
-- [ ] Monaco + web worker demo next to the renderer.
+- [x] Editor next to the renderer: `apps/studio` (CodeMirror; language server worker later).

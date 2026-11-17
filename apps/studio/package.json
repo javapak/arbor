@@ -1,0 +1,40 @@
+{
+  "name": "@arbor/studio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Edit arbor text and its diagram side by side. Embeds webgpu-flow from ../../webgpu-flow.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p . && vite build",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@arbor/adapter-flow": "0.1.0",
+    "@arbor/ir": "0.1.0",
+    "@arbor/language": "0.1.0",
+    "@codemirror/commands": "^6.8.1",
+    "@codemirror/language": "^6.11.0",
+    "@codemirror/lint": "^6.8.5",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.8",
+    "@fluentui/react-icons": "^2.0.311",
+    "@mantine/core": "^8.3.2",
+    "@mantine/hooks": "^8.3.2",
+    "allotment": "^1.20.4",
+    "codemirror": "^6.0.1",
+    "elkjs": "^0.11.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react-swc": "^4.0.0",
+    "@webgpu/types": "^0.1.65",
+    "typescript": "~5.8.3",
+    "vite": "^8.3.8"
+  }
+}
