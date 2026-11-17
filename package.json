@@ -9,6 +9,7 @@
     "apps/studio"
   ],
   "scripts": {
+    "setup": "npm i && cd packages/adapter-flow && npm i && cd ../ir && npm i && cd ../language && npm i",
     "generate": "npm run generate -w @arbor/language",
     "build": "npm run generate && tsc -b packages/ir packages/adapter-flow packages/language",
     "test": "npm run build && vitest run",
