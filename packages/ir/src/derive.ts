@@ -35,7 +35,7 @@ export function deriveReferences(doc: IRDocument): IRDocument {
         return !!f?.subsets?.some(s => within(kindId, s, name));
     };
 
-    const derived = (el: IRElement) => index.features(el.kind)
+    const derived = (el: IRElement) => index.elementFeatures(el)
         .filter((f): f is IRReference => f.feature === 'ref' && f.derived === true);
 
     // Opposites first: they depend only on what is written.
@@ -59,11 +59,11 @@ export function deriveReferences(doc: IRDocument): IRDocument {
     const done = new Set<string>();
     const union = (el: IRElement, name: string, seen: Set<string>): string[] => {
         const key = `${el.id}\u0000${name}`;
-        const f = index.feature(el.kind, name);
+        const f = index.elementFeature(el, name);
         if (done.has(key) || seen.has(key) || f?.feature !== 'ref' || !f.derived || f.opposite) return el.references[name] ?? [];
         seen.add(key);
         const out = new Set<string>();
-        for (const sub of index.features(el.kind)) {
+        for (const sub of index.elementFeatures(el)) {
             if (sub.feature === 'ref' && sub.subsets?.includes(name)) union(el, sub.name, seen).forEach(v => out.add(v));
         }
         set(el, name, [...out]);

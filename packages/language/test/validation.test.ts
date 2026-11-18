@@ -119,7 +119,7 @@ describe('profile validation', () => {
 
     it('the UML sample is clean', async () => {
         const dir = fileURLToPath(new URL('../../../samples/uml/', import.meta.url));
-        const r = await loadWorkspace(['uml.arbor', 'library.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
+        const r = await loadWorkspace(['uml.arbor', 'orm.arbor', 'library.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
         expect(r.diagnostics).toEqual([]);
     });
 

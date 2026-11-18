@@ -7,8 +7,8 @@
  */
 import { AstUtils, GrammarUtils, type CstNode } from 'langium';
 import type { Document, Element, Kind, Model, PropFeature, RefFeature } from './language/generated/ast.js';
-import { isContainsFeature, isElement, isModel, isProfile, isRefFeature } from './language/generated/ast.js';
-import { allFeatures, bounds, displayName, elementId, isA, kindId } from './language/semantics.js';
+import { isContainsFeature, isDataTypeDecl, isElement, isEnumDecl, isModel, isProfile, isRefFeature } from './language/generated/ast.js';
+import { bounds, displayName, elementFeatures, elementId, isA, kindId } from './language/semantics.js';
 import { buildDocuments, type Source } from './cli/load.js';
 
 /** Replace `length` characters at `offset` in the source named `uri` with `text`. */
@@ -124,7 +124,7 @@ export function planSetSlotIn(built: Built[], id: string, name: string, value: S
     const { el, uri, text } = found;
     const kind = el.kind.ref;
     if (!kind) return { error: `${displayName(el)} has an unknown kind` };
-    const feature = allFeatures(kind).get(name);
+    const feature = elementFeatures(el).get(name);   // with its stereotypes' tagged values
     if (!feature || isContainsFeature(feature)) return { error: `${kind.name} has no property or reference ${name}` };
 
     const written = valueText(feature, value, el, built);
@@ -177,9 +177,11 @@ function valueText(feature: PropFeature | RefFeature, value: SlotValue, from: El
 
 function literalText(prop: PropFeature, v: string | number | boolean): string | { error: string } {
     const t = prop.type;
-    if (t.$type === 'EnumTypeRef') {
-        const literals = t.enum.ref?.literals.map(l => l.name) ?? [];
-        return typeof v === 'string' && literals.includes(v) ? v : { error: `${String(v)} is not a literal of ${t.enum.$refText}` };
+    if (t.$type === 'NamedTypeRef') {
+        const decl = t.decl.ref;
+        if (isDataTypeDecl(decl)) return { error: `${prop.name} takes ${decl.name} values; edit it in the text` };
+        const literals = isEnumDecl(decl) ? decl.literals.map(l => l.name) : [];
+        return typeof v === 'string' && literals.includes(v) ? v : { error: `${String(v)} is not a literal of ${t.decl.$refText}` };
     }
     switch (t.primitive) {
         case 'string': return typeof v === 'string' ? JSON.stringify(v) : { error: `${prop.name} takes a string` };

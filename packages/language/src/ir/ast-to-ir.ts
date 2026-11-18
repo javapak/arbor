@@ -8,13 +8,13 @@
 import {
     IR_VERSION, deriveReferences,
     type IRFeatureModifiers,
-    type IRDocument, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile,
+    type IRDocument, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile, type IRProperty, type IRRecord,
     type IRScalar, type IRValue
 } from '@arbor/ir';
-import type { Element, Feature, Kind, Model, Profile, Value } from '../language/generated/ast.js';
-import { isListValue, isModel, isProfile, isRefValue } from '../language/generated/ast.js';
+import type { Element, Feature, Kind, Model, Profile, Value, Visual } from '../language/generated/ast.js';
+import { isDataTypeDecl, isListValue, isModel, isProfile, isRecordValue, isRefValue, type RecordValue } from '../language/generated/ast.js';
 import {
-    allFeatures, bounds, containmentCandidates, elementId, enumId, hasModifier, kindId, literalValue,
+    bounds, containmentCandidates, elementFeatures, elementId, enumId, hasModifier, kindId, literalValue,
     oppositeOf, redefinesOf, subsetsOf
 } from '../language/semantics.js';
 
@@ -42,13 +42,28 @@ function profileToIR(p: Profile): IRProfile {
         name: p.name,
         ...(p.version ? { version: p.version } : {}),
         kinds: p.kinds.map(kindToIR),
-        enums: p.enums.map(e => ({ id: enumId(e), name: e.name, literals: e.literals.map(l => l.name) }))
+        enums: p.enums.map(e => ({ id: enumId(e), name: e.name, literals: e.literals.map(l => l.name) })),
+        stereotypes: p.stereotypes.map(s => ({
+            id: enumId(s), name: s.name,
+            extends: s.metaclasses.flatMap(m => (m.ref ? [kindId(m.ref)] : [])),
+            features: s.features.flatMap(featureToIR),
+            visual: visualOf(s.visuals)
+        })),
+        datatypes: p.datatypes.map(d => ({
+            id: enumId(d), name: d.name,
+            features: d.features.flatMap(featureToIR).filter((f): f is IRProperty => f.feature === 'property')
+        }))
     };
 }
 
-function kindToIR(k: Kind): IRKind {
+function visualOf(visuals: Visual[]): Record<string, IRScalar> {
     const visual: Record<string, IRScalar> = {};
-    for (const v of k.visuals) for (const e of v.entries) visual[e.key] = literalValue(e.value);
+    for (const v of visuals) for (const e of v.entries) visual[e.key] = literalValue(e.value);
+    return visual;
+}
+
+function kindToIR(k: Kind): IRKind {
+    const visual = visualOf(k.visuals);
     return {
         id: kindId(k),
         name: k.name,
@@ -75,9 +90,10 @@ function featureToIR(f: Feature): IRFeature[] {
     const modifiers = modifiersToIR(f);
     switch (f.$type) {
         case 'PropFeature': {
-            const type = f.type.$type === 'PrimitiveTypeRef'
-                ? f.type.primitive
-                : f.type.enum.ref ? { enum: enumId(f.type.enum.ref) } : undefined;
+            const decl = f.type.$type === 'NamedTypeRef' ? f.type.decl.ref : undefined;
+            const type = f.type.$type === 'PrimitiveTypeRef' ? f.type.primitive
+                : isDataTypeDecl(decl) ? { datatype: enumId(decl) }
+                : decl ? { enum: enumId(decl) } : undefined;
             if (!type) return [];
             return [{
                 feature: 'property', name: f.name, type, multiplicity,
@@ -103,13 +119,15 @@ function modelToIR(m: Model): IRModel {
     const visit = (el: Element, parent: IRElement | null) => {
         const kind = el.kind.ref;
         if (!kind) return;
-        const features = allFeatures(kind);
+        const features = elementFeatures(el);
+        const stereotypes = el.stereotypes.flatMap(s => (s.ref ? [enumId(s.ref)] : []));
         const ir: IRElement = {
             id: elementId(el),
             name: el.name ?? '',   // unnamed: see localName
             kind: kindId(kind),
             parent: parent?.id ?? null,
             containedIn: null,
+            ...(stereotypes.length ? { stereotypes } : {}),
             children: [],
             properties: {},
             references: {}
@@ -144,10 +162,21 @@ function refTargets(v: Value): string[] {
 
 function scalarValue(v: Value): IRValue | undefined {
     if (isRefValue(v)) return undefined;
+    if (isRecordValue(v)) return recordValue(v);
     if (isListValue(v)) {
-        return v.items.flatMap(i => (isRefValue(i) || isListValue(i) ? [] : [literalValue(i)]));
+        return v.items.flatMap(i => (isRefValue(i) || isListValue(i) ? [] : [isRecordValue(i) ? recordValue(i) : literalValue(i)]));
     }
     return literalValue(v);
+}
+
+/** A datatype's value: the fields written, by name. */
+function recordValue(r: RecordValue): IRRecord {
+    const out: IRRecord = {};
+    for (const slot of r.slots) {
+        const v = scalarValue(slot.value);
+        if (v !== undefined) out[slot.name] = v;
+    }
+    return out;
 }
 
 function kindsUsed(m: Model): Kind[] {

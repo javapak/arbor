@@ -1,5 +1,5 @@
-import type { IRDocument, IRElement, IRFeature, IRMultiplicity, IRScalar } from './types.js';
-import { IRIndex } from './query.js';
+import type { IRDocument, IRElement, IRFeature, IRMultiplicity, IRScalar, IRValue } from './types.js';
+import { IRIndex, valueText } from './query.js';
 
 /**
  * Profile -> JSON Schema for one element's slots, for generated forms.
@@ -26,12 +26,14 @@ export type FieldSchema = ScalarSchema | ListSchema;
 
 export interface ScalarSchema {
     title: string;
-    type?: 'string' | 'integer' | 'number' | 'boolean';
+    type?: 'string' | 'integer' | 'number' | 'boolean' | 'object';
     enum?: string[];
     oneOf?: Array<{ const: string; title: string }>;
     default?: IRScalar;
     /** Derived (worked out from the model) or readonly: shown, not edited. */
     readOnly?: boolean;
+    /** A datatype's value: shown as the text writes it (see `slotText`). */
+    'x-arbor-text'?: true;
     /** `property` or `ref`. */
     'x-arbor-feature': 'property' | 'ref';
     /** Enum ID (properties) or target kind ID (references). */
@@ -51,17 +53,22 @@ export interface ListSchema {
 }
 
 /** A form's value: slot name -> scalar, element ID, or a list of them. */
-export type SlotValues = Record<string, IRScalar | IRScalar[]>;
+export type SlotValues = Record<string, IRValue>;
 
 const TYPES = { string: 'string', int: 'integer', float: 'number', bool: 'boolean' } as const;
 
-export function slotSchema(doc: IRDocument | IRIndex, kindId: string): SlotSchema {
+/**
+ * The schema for elements of a kind, or for one element (its kind's slots,
+ * then those of the stereotypes applied to it).
+ */
+export function slotSchema(doc: IRDocument | IRIndex, of: string | IRElement): SlotSchema {
     const index = doc instanceof IRIndex ? doc : new IRIndex(doc);
+    const kindId = typeof of === 'string' ? of : of.kind;
     const enums = new Map(index.doc.profiles.flatMap(p => p.enums.map(e => [e.id, e] as const)));
     const properties: Record<string, FieldSchema> = {};
     const required: string[] = [];
 
-    for (const f of index.features(kindId)) {
+    for (const f of typeof of === 'string' ? index.features(kindId) : index.elementFeatures(of)) {
         if (f.feature === 'contains') continue;
         const item = itemSchema(f, index, enums);
         const readOnly = f.derived || f.readonly ? { readOnly: true } : {};
@@ -100,6 +107,12 @@ export function slotValues(element: IRElement, schema: SlotSchema): SlotValues {
     return out;
 }
 
+/** A slot's value as the text writes it, for fields a form shows as text (structured values). */
+export function slotText(index: IRIndex, element: IRElement, name: string, value: IRValue): string {
+    const f = index.elementFeature(element, name);
+    return f?.feature === 'property' ? valueText(index, f.type, value) : JSON.stringify(value);
+}
+
 /** A feature is many-valued unless its upper bound is 1, as in the text (`[0..1]` is the default). */
 export function isMany(m: IRMultiplicity): boolean {
     return m.upper !== 1;
@@ -119,6 +132,10 @@ function itemSchema(
         };
     }
     const common = { 'x-arbor-feature': 'property' as const, ...(f.default !== undefined ? { default: f.default } : {}) };
+    if (typeof f.type === 'object' && 'datatype' in f.type) {
+        // Structured values are edited in the text; a form shows them as written.
+        return { type: 'object', readOnly: true, 'x-arbor-type': f.type.datatype, 'x-arbor-text': true, ...common };
+    }
     if (typeof f.type === 'object') {
         return { type: 'string', enum: enums.get(f.type.enum)?.literals ?? [], 'x-arbor-type': f.type.enum, ...common };
     }

@@ -27,6 +27,8 @@ export interface IRProfile {
     version?: string;
     kinds: IRKind[];
     enums: IREnum[];
+    datatypes: IRDataType[];
+    stereotypes: IRStereotype[];
 }
 
 export interface IRKind {
@@ -70,7 +72,7 @@ export interface IRMultiplicity {
 export interface IRProperty extends IRFeatureModifiers {
     feature: 'property';
     name: string;
-    type: IRPrimitiveType | { enum: string };
+    type: IRPrimitiveType | { enum: string } | { datatype: string };
     multiplicity: IRMultiplicity;
     default?: IRScalar;
 }
@@ -96,6 +98,31 @@ export interface IRReference extends IRFeatureModifiers {
 }
 
 export type IRPrimitiveType = 'string' | 'int' | 'float' | 'bool';
+
+/**
+ * A UML stereotype: properties and references (tagged values) and visuals that
+ * an element of a kind it extends gets when the stereotype is applied to it.
+ */
+export interface IRStereotype {
+    /** Qualified as `<profile>.<stereotype>`. */
+    id: string;
+    name: string;
+    /** Kind IDs it applies to (and to their sub-kinds). */
+    extends: string[];
+    features: IRFeature[];
+    visual: IRVisual;
+}
+
+/**
+ * A structured value type (a UML DataType): values with fields and no
+ * identity, written in place (`{ street: "Main St" }`). Fields are properties.
+ */
+export interface IRDataType {
+    /** Qualified as `<profile>.<datatype>`. */
+    id: string;
+    name: string;
+    features: IRProperty[];
+}
 
 export interface IREnum {
     /** Qualified as `<profile>.<enum>`. */
@@ -125,6 +152,8 @@ export interface IRElement {
     parent: string | null;
     /** Containment feature name in the parent that holds this element. */
     containedIn: string | null;
+    /** Stereotype IDs applied to it, when there are any. Their slots are in `properties` and `references`. */
+    stereotypes?: string[];
     children: string[];
     properties: Record<string, IRValue>;
     /** Reference feature name → target element IDs. */
@@ -132,4 +161,6 @@ export interface IRElement {
 }
 
 export type IRScalar = string | number | boolean;
-export type IRValue = IRScalar | IRScalar[];
+/** A datatype's value: field name -> value (only the fields written). */
+export interface IRRecord { [field: string]: IRValue }
+export type IRValue = IRScalar | IRRecord | Array<IRScalar | IRRecord>;

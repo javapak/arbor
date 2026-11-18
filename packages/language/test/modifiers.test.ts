@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IRIndex, referenceSlotsFor, slotSchema } from '@arbor/ir';
+import { IRIndex, referenceSlotsFor, slotSchema, slotText } from '@arbor/ir';
 import { toFlowGraph } from '@arbor/adapter-flow';
 import { DiagnosticCode as C } from '../src/language/arbor-validator.js';
 import { loadWorkspace } from '../src/cli/load.js';
@@ -153,5 +153,170 @@ describe('feature modifiers', () => {
             .toEqual(['general', 'friends', 'rivals', 'partner']);
         const edges = toFlowGraph(r.ir).edges.map(e => e.data.feature);
         expect(edges).toEqual(['general']);   // not A's derived `specific`
+    });
+});
+
+describe('unnamed elements', () => {
+    const profile = `profile u {
+        kind Class { contains generalizations: Generalization [0..*]  contains notes: Note [0..*] }
+        kind Generalization {
+            ref general: Class [1]
+            visual { source: "owner"  target: "general"  targetMarker: "triangle" }
+        }
+        kind Note { ref about: Note [0..1] }
+    }`;
+
+    it('get IDs from their kind and place among unnamed siblings, unless they have a stable one', async () => {
+        const r = await load(`model m {
+            Class A {}
+            Class B { Generalization { general: -> A }  Generalization @"b-is-c" { general: -> C }  Generalization { general: -> C } }
+            Class C {}
+            Note {}
+        }`, profile);
+        expect(r.diagnostics).toEqual([]);
+        const ids = r.ir.models[0].elements.map(e => e.id);
+        expect(ids).toEqual(['m.A', 'm.B', 'm.B.Generalization#1', 'b-is-c', 'm.B.Generalization#2', 'm.C', 'm.Note#1']);
+        expect(r.ir.models[0].elements.find(e => e.id === 'm.Note#1')!.name).toBe('');
+        // Drawn: the unnamed edge kind with no label, the unnamed node as `:Kind`.
+        const g = toFlowGraph(r.ir);
+        expect(g.edges.find(e => e.id === 'm.B.Generalization#1')!.data.label).toBe('');
+        expect(g.nodes.find(n => n.id === 'm.Note#1')!.data.label).toBe(':Note');
+    });
+
+    it('cannot be referenced by name, and messages say which element they mean', async () => {
+        const r = await load('model m { Class A {} Class B { Generalization {} } Note n { about: -> Note } }', profile);
+        expect(r.diagnostics.find(d => d.code === C.MissingRequired)?.message).toBe("Generalization (unnamed) is missing required 'general'.");
+        expect(r.diagnostics.some(d => d.message.includes("Could not resolve reference to Element named 'Note'"))).toBe(true);
+    });
+});
+
+describe('datatypes', () => {
+    const profile = `profile d {
+        enum Country { no, se }
+        datatype Address {
+            prop street:  string [1]
+            prop country: Country = no
+        }
+        datatype Contact {
+            prop email:   string [0..1]
+            prop address: Address [0..1]
+        }
+        kind Customer {
+            prop home:     Address [0..1]
+            prop contacts: Contact [0..*]
+            prop name:     string [0..1]
+        }
+    }`;
+
+    it('are structured values, written in place and carried into the IR as records', async () => {
+        const r = await load(`model m {
+            Customer ada {
+                home: { street: "Main St"  country: se }
+                contacts: [ { email: "a@x.org" }, { address: { street: "Side St" } } ]
+            }
+        }`, profile);
+        expect(r.diagnostics).toEqual([]);
+        const index = new IRIndex(r.ir);
+        expect(index.datatypes.get('d.Address')!.features.map(f => f.name)).toEqual(['street', 'country']);
+        expect(index.feature('d.Customer', 'home')).toMatchObject({ type: { datatype: 'd.Address' } });
+        const ada = index.elements.get('m.ada')!;
+        expect(ada.properties.home).toEqual({ street: 'Main St', country: 'se' });
+        expect(ada.properties.contacts).toEqual([{ email: 'a@x.org' }, { address: { street: 'Side St' } }]);
+        // Shown as the text writes them: strings quoted, enum literals bare.
+        expect(slotText(index, ada, 'home', ada.properties.home)).toBe('{ street: "Main St"  country: se }');
+        expect(toFlowGraph(r.ir).nodes[0].visual.compartment![0]).toBe('home = { street: "Main St"  cou…');
+        // Forms show them as text, read-only.
+        expect(slotSchema(index, 'd.Customer').properties.home).toMatchObject({ type: 'object', readOnly: true, 'x-arbor-text': true });
+    });
+
+    it('checks fields like slots', async () => {
+        const r = await load(`model m {
+            Customer a { home: { stret: "x" } }
+            Customer b { home: { street: 3  country: dk } }
+            Customer c { home: "Main St"  name: { street: "x" } }
+        }`, profile);
+        const errors = r.diagnostics.filter(d => d.severity === 'error');
+        expect(errors.map(d => d.code)).toEqual([C.UnknownSlot, C.MissingRequired, C.TypeMismatch, C.TypeMismatch, C.TypeMismatch, C.TypeMismatch]);
+        expect(errors[0].fix).toBe('street');
+        expect(errors[1].message).toBe("This Address is missing required 'street'.");
+        expect(errors[4].message).toBe("'home' takes Address values: write { field: value ... }.");
+        expect(errors[5].message).toBe("'name' expects a value, not { ... }.");
+    });
+
+    it('take no default', async () => {
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: 'profile q { datatype P { prop x: int } kind K { prop p: P = 3 } }' }]);
+        expect(r.diagnostics.map(d => d.code)).toEqual([C.BadDefault]);
+    });
+});
+
+describe('stereotypes', () => {
+    const profile = `profile s {
+        kind Class { prop isAbstract: bool = false  contains attributes: Attribute [0..*] }
+        kind Attribute { prop type: string [0..1]  visual { member: true } }
+        kind Note {}
+        stereotype Entity extends Class {
+            prop table: string [1]
+            ref audit: Class [0..1]
+            visual { color: "#f59e0b"  container: true }
+        }
+        stereotype Audited extends Class { prop retention: int = 30 }
+        stereotype Key extends Attribute {}
+        stereotype Clash extends Class { prop isAbstract: bool  contains things: Note [0..*] }
+        stereotype Tabled extends Class { prop table: string [0..1] }
+    }`;
+
+    it('add tagged values and visuals to the elements they are applied to', async () => {
+        const r = await load(`model m {
+            <<Entity, Audited>> Class Customer { table: "customers"  retention: 90  audit: -> Log
+                <<Key>> Attribute id { type: "uuid" }
+            }
+            «Entity» Class Log { table: "log" }
+        }`, profile);
+        expect(r.diagnostics.filter(d => d.code !== C.BadStereotype)).toEqual([]);
+        const index = new IRIndex(r.ir);
+        const customer = index.elements.get('m.Customer')!;
+        expect(customer.stereotypes).toEqual(['s.Entity', 's.Audited']);
+        expect(customer.properties).toEqual({ table: 'customers', retention: 90 });
+        expect(customer.references).toEqual({ audit: ['m.Log'] });
+        expect(index.elements.get('m.Log')!.stereotypes).toEqual(['s.Entity']);
+        expect(index.stereotypes.get('s.Entity')).toMatchObject({ extends: ['s.Class'], visual: { color: '#f59e0b' } });
+        // Their slots join the element's in forms; their visuals restyle it but don't change its structure.
+        expect(Object.keys(slotSchema(index, customer).properties)).toEqual(['isAbstract', 'table', 'audit', 'retention']);
+        expect(slotSchema(index, customer).required).toEqual(['table']);
+        expect(index.elementVisual(customer)).toMatchObject({ color: '#f59e0b' });
+        expect(index.elementVisual(customer).container).toBeUndefined();
+        const g = toFlowGraph(r.ir);
+        const node = g.nodes.find(n => n.id === 'm.Customer')!;
+        expect(node.data.label).toBe('«Entity, Audited» Customer');
+        expect(node.visual.color).toBe('#f59e0b');
+        expect(node.visual.compartment).toEqual(['table = "customers"', 'retention = 90']);
+        expect(g.nodes.find(n => n.id === 'm.Customer.id')!.visual.detail).toBe('«Key»');
+        expect(g.edges.map(e => e.data.feature)).toEqual(['audit']);
+    });
+
+    it('apply only to the kinds they extend, once, without clashing', async () => {
+        const r = await load(`model m {
+            <<Key>> Class A {}
+            <<Audited, Audited>> Class B {}
+            <<Entity, Tabled>> Class C { table: "c" }
+            <<Entity>> Class D {}
+            Class E { retention: 3 }
+        }`, profile);
+        const errors = r.diagnostics.filter(d => d.severity === 'error' && d.code !== C.BadStereotype);
+        expect(errors.map(d => d.message)).toEqual([
+            'Key applies to Attribute, not Class.',
+            'Audited is applied twice.',
+            "Tabled and Entity both add 'table', so it would be ambiguous here.",
+            "Class D is missing required 'table'.",
+            "Class has no feature 'retention'.",
+        ]);
+    });
+
+    it('add new names, and no containments', async () => {
+        const r = await load('model m {}', profile);
+        expect(r.diagnostics.filter(d => d.code === C.BadStereotype).map(d => d.message)).toEqual([
+            "'isAbstract' is already a feature of Class, which Clash extends.",
+            "Stereotypes add properties and references, not containments ('things').",
+        ]);
     });
 });

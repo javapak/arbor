@@ -1,4 +1,5 @@
-// A lending library as a UML class diagram (see uml.arbor).
+// A lending library as a UML class diagram (see uml.arbor), with members
+// mapped to a table through the orm profile's stereotypes.
 model library {
 
     DataType String {}
@@ -8,17 +9,17 @@ model library {
         isAbstract: true
         Property title { type: -> String }
         Operation checkOut { returns: -> Date }
-        InterfaceRealization lendable { contract: -> Lendable }
+        InterfaceRealization { contract: -> Lendable }
     }
 
     Class Book {
         Property isbn { type: -> String }
-        Generalization item { general: -> Item }
+        Generalization { general: -> Item }
     }
 
     Class Disc {
         Property minutes { type: -> String }
-        Generalization item { general: -> Item }
+        Generalization { general: -> Item }
     }
 
     Interface Lendable {
@@ -29,7 +30,10 @@ model library {
         Property name { type: -> String }
     }
 
-    Class Member {
+    <<Entity>> Class Member {
+        table: "members"
+        indexes: [ { columns: ["name"] }, { columns: ["name", "since"]  unique: true } ]
+        <<Id>> Property number { type: -> String }
         Property name { type: -> String }
         Property since { type: -> Date }
     }

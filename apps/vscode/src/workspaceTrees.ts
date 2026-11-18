@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 import { WorkspaceRequests, type SourceLocation, type WorkspaceResult } from '@arbor/language/protocol';
-import { IRIndex, displayName, type IREnum, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile, type IRValue } from '@arbor/ir';
+import { IRIndex, displayName, valueText, type IRDataType, type IREnum, type IRStereotype, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile, type IRValue } from '@arbor/ir';
 
 const REFRESH_DELAY_MS = 150;
 
@@ -62,7 +62,9 @@ function toLocation(client: LanguageClient, at: SourceLocation): vscode.Location
 export type Node =
     | { type: 'profile'; profile: IRProfile; layeredOn: string[] }
     | { type: 'kind'; kind: IRKind }
-    | { type: 'feature'; kind: IRKind; feature: IRFeature }
+    | { type: 'feature'; kind: IRKind | IRDataType | IRStereotype; feature: IRFeature }
+    | { type: 'datatype'; d: IRDataType }
+    | { type: 'stereotype'; s: IRStereotype }
     | { type: 'enum'; e: IREnum }
     | { type: 'literal'; e: IREnum; literal: string }
     | { type: 'model'; model: IRModel }
@@ -75,6 +77,8 @@ function key(n: Node): string {
         case 'profile': return `profile:${n.profile.name}`;
         case 'kind': return `kind:${n.kind.id}`;
         case 'feature': return `feature:${n.kind.id}.${n.feature.name}`;
+        case 'datatype': return `datatype:${n.d.id}`;
+        case 'stereotype': return `stereotype:${n.s.id}`;
         case 'enum': return `enum:${n.e.id}`;
         case 'literal': return `literal:${n.e.id}.${n.literal}`;
         case 'model': return `model:${n.model.name}`;
@@ -151,7 +155,7 @@ abstract class OutlineTree implements vscode.TreeDataProvider<Node> {
                     f.redefines?.length ? `redefines ${f.redefines.join(', ')}` : '',
                 ].filter(Boolean).map(c => ` ${c}`).join('');
                 if (f.feature === 'property') {
-                    const type = typeof f.type === 'object' ? short(f.type.enum, p) : f.type;
+                    const type = typeof f.type === 'object' ? short('enum' in f.type ? f.type.enum : f.type.datatype, p) : f.type;
                     const dflt = f.default !== undefined ? ` = ${literal(f.default, typeof f.type === 'object')}` : '';
                     return item(f.name, 'symbol-property', `${before}${type} ${multiplicity(f)}${dflt}${after}`);
                 }
@@ -159,6 +163,10 @@ abstract class OutlineTree implements vscode.TreeDataProvider<Node> {
                     ? item(f.name, 'symbol-structure', `${before}contains ${short(f.target, p)} ${multiplicity(f)}${after}`)
                     : item(f.name, 'references', `${before}-> ${short(f.target, p)} ${multiplicity(f)}${after}`);
             }
+            case 'stereotype':
+                return item(`«${n.s.name}»`, 'symbol-namespace', `stereotype of ${n.s.extends.map(id => short(id, owner(n.s.id))).join(', ')}`);
+            case 'datatype':
+                return item(n.d.name, 'symbol-struct', `datatype · ${n.d.features.length} field${n.d.features.length === 1 ? '' : 's'}`);
             case 'enum':
                 return item(n.e.name, 'symbol-enum', `${n.e.literals.length} literals`);
             case 'literal':
@@ -175,18 +183,19 @@ abstract class OutlineTree implements vscode.TreeDataProvider<Node> {
                 const derived = n.element.name ? n.element.id === `${prefix}${n.element.name}`
                     : n.element.id.startsWith(prefix) && /^\w+#\d+$/.test(n.element.id.slice(prefix.length));
                 const id = derived ? '' : ` · @"${n.element.id}"`;
-                return item(displayName(n.element), 'symbol-object', `${short(n.element.kind)}${id}`);
+                const stereotypes = this.outline.irIndex?.stereotypeLabel(n.element);
+                return item(displayName(n.element), 'symbol-object', `${stereotypes ? `${stereotypes} ` : ''}${short(n.element.kind)}${id}`);
             }
             case 'slot': {
                 const names = (ids: string[]) => ids.map(id => {
                     const target = n.model.elements.find(e => e.id === id);
                     return `-> ${target ? displayName(target) : id}`;
                 });
-                const feature = this.outline.irIndex?.features(n.element.kind).find(f => f.name === n.name);
-                const isEnum = feature?.feature === 'property' && typeof feature.type === 'object';
+                const index = this.outline.irIndex;
+                const feature = index?.features(n.element.kind).find(f => f.name === n.name);
                 const text = n.ref
                     ? names(n.value as string[]).join(', ')
-                    : Array.isArray(n.value) ? `[${n.value.map(v => literal(v, isEnum)).join(', ')}]` : literal(n.value, isEnum);
+                    : index && feature?.feature === 'property' ? valueText(index, feature.type, n.value) : JSON.stringify(n.value);
                 return item(n.name, n.ref ? 'references' : 'symbol-property', text);
             }
         }
@@ -196,10 +205,14 @@ abstract class OutlineTree implements vscode.TreeDataProvider<Node> {
         if (n.type === 'profile') {
             return [
                 ...n.profile.kinds.map(kind => ({ type: 'kind' as const, kind })),
+                ...(n.profile.stereotypes ?? []).map(s => ({ type: 'stereotype' as const, s })),
+                ...(n.profile.datatypes ?? []).map(d => ({ type: 'datatype' as const, d })),
                 ...n.profile.enums.map(e => ({ type: 'enum' as const, e })),
             ];
         }
         if (n.type === 'kind') return n.kind.features.map(feature => ({ type: 'feature' as const, kind: n.kind, feature }));
+        if (n.type === 'stereotype') return n.s.features.map(feature => ({ type: 'feature' as const, kind: n.s, feature }));
+        if (n.type === 'datatype') return n.d.features.map(feature => ({ type: 'feature' as const, kind: n.d, feature }));
         if (n.type === 'enum') return n.e.literals.map(literal => ({ type: 'literal' as const, e: n.e, literal }));
         return [];
     }

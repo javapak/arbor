@@ -26,10 +26,22 @@ profile persistence version "0.1.0" {
     }
 
     enum OnDeleteAction { cascade, setNull, restrict }
+
+    datatype Money {                          // a structured value type
+        prop amount:   float [1]
+        prop currency: string = "EUR"
+    }
+
+    stereotype Audited extends Entity {       // extra slots and visuals, applied per element
+        prop retention: int = 30
+        visual { color: "#ef4444" }
+    }
 }
 ```
 
-- Property types: `string`, `int`, `float`, `bool`, or an enum name.
+- Property types: `string`, `int`, `float`, `bool`, an enum name, or a datatype name.
+- A `datatype` is a UML DataType: values with fields and no identity, written in place (`price: { amount: 9.5 }`, see [Models](#models)). Its fields are `prop`s, which may themselves be datatypes; its properties take no default.
+- A `stereotype` is a UML stereotype: properties, references and visuals for elements of the kinds it `extends` (and their sub-kinds), added only to elements it's applied to (`<<Audited>> Entity Order { … }`). Its slots are written with the element's own, so their names must be new to those kinds; it adds no containments. Its visuals restyle the element (colour, shape, icon…) but don't change how it's laid out (`container`, `member`, `source`, `target` stay the kind's).
 - Multiplicity: `[1]`, `[0..1]`, `[1..*]`, `[*]`. Defaults: `prop`/`ref` are `[0..1]`, `contains` is `[0..*]`.
 - A property with a default is never required.
 - `extends` takes one or more kinds; features and visuals inherit, and the nearest definition wins.
@@ -112,14 +124,14 @@ kind Generalization {
 }
 ```
 
-[samples/uml](https://github.com/javapak/arbor/tree/main/samples/uml) has a small UML class-diagram profile (classes, interfaces, generalizations, realizations, dependencies, associations, compositions) and a model in it. It has its own folder because its kind names (`Package`, `Interface`, `Operation`) would be ambiguous next to `software`'s.
+[samples/uml](https://github.com/javapak/arbor/tree/main/samples/uml) has a small UML class-diagram profile (classes, interfaces, generalizations, realizations, dependencies, associations, compositions), an `orm` profile of stereotypes for it, and a model using both. It has its own folder because its kind names (`Package`, `Interface`, `Operation`) would be ambiguous next to `software`'s.
 
 ## Models
 
 Every element has the same shape:
 
 ```
-<Kind> <Name> (@"stable-id")? {
+(<<Stereotype, …>>)? <Kind> <Name>? (@"stable-id")? {
     slot: value
     <nested elements>
 }
@@ -133,11 +145,14 @@ Every element has the same shape:
 | enum literal | `cascade` (bare identifier) |
 | reference | `-> Name`, `-> Parent.Child`, `-> model.Name` |
 | list | `[ "a", "b" ]`, `[ -> A, -> B ]` |
+| datatype value | `{ amount: 9.5  currency: "NOK" }`, its fields like slots (lists of them too) |
 
 - Nested elements go into whichever `contains` feature of the parent accepts their kind; it is an error if none or several do.
 - The kind before an element name may be qualified: `software.Field f { … }`. Needed only when several profiles define that kind name.
 - References resolve by simple name to elements at the top level or in an enclosing scope, across files. Reach a nested element with a dotted path (`-> Checkout.OrderApi.placeOrder`), and qualify with the model name (`-> shop.Payments`) when several models have a top-level element of that name. A path's first segment is tried as an element first, then as a model name.
 - IDs: `@"id"` if given, else `<parentId>.<name>`, rooted at the model name. Give stable IDs to anything a diagram or another system refers to, so renames don't break them.
+- The name may be left out, for elements nothing refers to, like a UML generalization: `Generalization { general: -> Item }`. An unnamed element can't be referenced, is labelled `:Kind` in diagrams, and its ID is `<parentId>.<Kind>#<n>`, counting the unnamed elements of that kind among its siblings (without a stable ID) from 1. Reordering them changes the ID, so give one a stable ID if its layout or anything else outside the text matters.
+- Stereotypes are applied in `<< >>` (or `« »`) before the kind, several separated by commas. Each must extend the element's kind (ARB113), and their slots are written with the element's own. Diagrams show them before the name: `«Entity» Customer`.
 - Keywords may be used as slot names (`version: "2"`), but not as element names or enum literals.
 
 ## Diagnostics
@@ -162,6 +177,7 @@ Every element has the same shape:
 | ARB009 | bad `opposite`: unknown feature, not a reference or containment, doesn't point back, or names another opposite |
 | ARB010 | bad `subsets`: unknown feature, different sort or type, or allows more values than the feature it subsets |
 | ARB011 | bad `redefines`: no inherited feature of that name, or a different sort or type |
+| ARB012 | bad stereotype: a feature its kinds already have, or a containment |
 | ARB101 | abstract kind instantiated |
 | ARB102 | unknown slot (`fix` = closest feature) |
 | ARB103 | value has the wrong type |
@@ -174,3 +190,4 @@ Every element has the same shape:
 | ARB110 | duplicate element ID |
 | ARB111 | a value repeated in a `unique` slot |
 | ARB112 | written opposite references disagree: a target doesn't point back (warning; `data` names the element and slot) |
+| ARB113 | a stereotype applied to a kind it doesn't extend, applied twice, or adding a slot another applied one adds too |

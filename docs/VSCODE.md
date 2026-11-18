@@ -114,6 +114,11 @@ Chat sits) shows a form for the element selected in the diagram you last used.
 Every property of its kind is there, defaults greyed out; a change is written
 to the text as you type. **Show in text** jumps to the element.
 
+The tagged values of stereotypes applied to the element are listed with its own
+properties, and its stereotypes above its name. Derived and `readonly` features
+are shown but can't be changed here, and nor can datatype values
+(`{ street: "…" }`), which are shown as written; edit those in the text.
+
 ![The Properties view for Customer](images/vscode/properties-view.png)
 
 Like any view, it can be dragged elsewhere, collapsed or closed. **Arbor: Show

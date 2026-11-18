@@ -11,14 +11,14 @@
  */
 import { AstUtils, type AstNode, type IndexManager, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import type {
-    EdgeVisual, Element, Feature, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual, VisualEntry
+    DataTypeDecl, EdgeVisual, Element, Feature, RecordValue, StereotypeDecl, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual, VisualEntry
 } from './generated/ast.js';
-import { isElement, isListValue, isRefValue } from './generated/ast.js';
+import { isElement, isListValue, isRecordValue, isRefValue } from './generated/ast.js';
 import { EDGE_VISUAL_KEYS, OWNER_END, VISUAL_KEYS, checkVisualValue, type VisualKeySpec } from '@arbor/ir';
 import type { ArborServices } from './arbor-module.js';
 import type { ArborScopeProvider } from './arbor-scope.js';
 import {
-    allFeatures, bounds, checkLiteral, closest, containmentCandidates,
+    allFeatures, bounds, checkLiteral, closest, containmentCandidates, datatypeOf, elementFeatures, stereotypeApplies,
     displayName, elementId, findInheritanceCycle, hasModifier, isA, isRequired, lineage, literalValue,
     oppositeOf, redefinesOf, subsetsOf
 } from './semantics.js';
@@ -36,6 +36,7 @@ export const DiagnosticCode = {
     BadOpposite: 'ARB009',
     BadSubsets: 'ARB010',
     BadRedefines: 'ARB011',
+    BadStereotype: 'ARB012',
     // models
     AbstractInstance: 'ARB101',
     UnknownSlot: 'ARB102',
@@ -48,7 +49,8 @@ export const DiagnosticCode = {
     DerivedSlot: 'ARB109',
     DuplicateId: 'ARB110',
     DuplicateValue: 'ARB111',
-    OppositeMismatch: 'ARB112'
+    OppositeMismatch: 'ARB112',
+    StereotypeNotApplicable: 'ARB113'
 } as const;
 
 export function registerValidationChecks(services: ArborServices): void {
@@ -57,6 +59,7 @@ export function registerValidationChecks(services: ArborServices): void {
     const checks: ValidationChecks<ArborAstType> = {
         Profile: validator.checkProfile,
         Kind: validator.checkKind,
+        StereotypeDecl: validator.checkStereotype,
         PropFeature: validator.checkPropFeature,
         Multiplicity: validator.checkMultiplicity,
         Visual: validator.checkVisual,
@@ -108,7 +111,7 @@ export class ArborValidator {
         this.checkUniqueRoot(profile, accept);
         this.checkAmbiguousReferences(profile, accept);
         const seen = new Set<string>();
-        for (const decl of [...profile.kinds, ...profile.enums]) {
+        for (const decl of [...profile.kinds, ...profile.enums, ...profile.datatypes, ...profile.stereotypes]) {
             if (seen.has(decl.name)) {
                 accept('error', `Duplicate name '${decl.name}' in profile ${profile.name}.`,
                     { node: decl, property: 'name', code: DiagnosticCode.DuplicateName });
@@ -147,6 +150,26 @@ export class ArborValidator {
             this.checkOpposite(kind, f, accept);
             this.checkSubsets(kind, f, accept);
             this.checkRedefines(kind, f, accept);
+        }
+    }
+
+    /**
+     * A stereotype adds properties and references to the kinds it extends, so its feature names
+     * must be new to them; containment stays with the kinds.
+     */
+    checkStereotype(stereotype: StereotypeDecl, accept: ValidationAcceptor): void {
+        for (const f of stereotype.features) {
+            if (f.$type === 'ContainsFeature') {
+                accept('error', `Stereotypes add properties and references, not containments ('${f.name}').`,
+                    { node: f, code: DiagnosticCode.BadStereotype });
+                continue;
+            }
+            for (const m of stereotype.metaclasses) {
+                if (m.ref && allFeatures(m.ref).has(f.name)) {
+                    accept('error', `'${f.name}' is already a feature of ${m.ref.name}, which ${stereotype.name} extends.`,
+                        { node: f, property: 'name', code: DiagnosticCode.BadStereotype });
+                }
+            }
         }
     }
 
@@ -231,7 +254,7 @@ export class ArborValidator {
     private featureMismatch(f: Feature, g: Feature): string | undefined {
         if (f.$type !== g.$type) return `one is a ${sortOf(f)}, the other a ${sortOf(g)}`;
         if (f.$type === 'PropFeature' && g.$type === 'PropFeature') {
-            const type = (p: PropFeature) => (p.type.$type === 'PrimitiveTypeRef' ? p.type.primitive : p.type.enum.ref);
+            const type = (p: PropFeature) => (p.type.$type === 'PrimitiveTypeRef' ? p.type.primitive : p.type.decl.ref);
             return type(f) === type(g) ? undefined : 'their types differ';
         }
         if (f.$type !== 'PropFeature' && g.$type !== 'PropFeature' && f.target.ref && g.target.ref && !isA(f.target.ref, g.target.ref)) {
@@ -242,6 +265,12 @@ export class ArborValidator {
 
     checkPropFeature(prop: PropFeature, accept: ValidationAcceptor): void {
         if (!prop.default) return;
+        const datatype = datatypeOf(prop);
+        if (datatype) {
+            accept('error', `'${prop.name}' takes ${datatype.name} values, which have no default.`,
+                { node: prop, property: 'default', code: DiagnosticCode.BadDefault });
+            return;
+        }
         const problem = checkLiteral(prop, prop.default);
         if (problem) {
             accept('error', `Default for '${prop.name}': ${problem}.`,
@@ -265,6 +294,7 @@ export class ArborValidator {
         this.checkVisualEntries(visual.entries, VISUAL_KEYS, accept);
         // An edge kind's ends are references of the kind (or its owner).
         const kind = visual.$container;
+        if (kind.$type !== 'Kind') return;   // a stereotype's visuals restyle; they don't make edges
         const refs = [...allFeatures(kind).values()].filter(f => f.$type === 'RefFeature').map(f => f.name);
         for (const e of visual.entries) {
             if (e.key !== 'source' && e.key !== 'target') continue;
@@ -337,8 +367,9 @@ export class ArborValidator {
                 { node: el, property: 'kind', code: DiagnosticCode.AbstractInstance });
         }
 
-        const features = allFeatures(kind);
+        const features = elementFeatures(el);
         const given = new Set<string>();
+        this.checkAppliedStereotypes(el, kind, accept);
 
         for (const slot of el.slots) {
             if (given.has(slot.name)) {
@@ -412,7 +443,58 @@ export class ArborValidator {
         }
     }
 
-    private checkSlot(kind: Kind, slot: Slot, features: Map<string, import('./generated/ast.js').Feature>, accept: ValidationAcceptor): void {
+    /** Each applied stereotype extends the element's kind, is applied once, and adds names no other one does. */
+    private checkAppliedStereotypes(el: Element, kind: Kind, accept: ValidationAcceptor): void {
+        const seen = new Map<string, StereotypeDecl>();   // feature name -> the stereotype adding it
+        const applied = new Set<StereotypeDecl>();
+        el.stereotypes.forEach((ref, index) => {
+            const s = ref.ref;
+            if (!s) return;
+            if (!stereotypeApplies(s, kind)) {
+                const to = s.metaclasses.map(m => m.ref?.name ?? m.$refText).join(', ');
+                accept('error', `${s.name} applies to ${to}, not ${kind.name}.`,
+                    { node: el, property: 'stereotypes', index, code: DiagnosticCode.StereotypeNotApplicable });
+                return;
+            }
+            if (applied.has(s)) {
+                accept('error', `${s.name} is applied twice.`,
+                    { node: el, property: 'stereotypes', index, code: DiagnosticCode.StereotypeNotApplicable });
+                return;
+            }
+            for (const f of s.features) {
+                const other = seen.get(f.name);
+                if (other) {
+                    accept('error', `${s.name} and ${other.name} both add '${f.name}', so it would be ambiguous here.`,
+                        { node: el, property: 'stereotypes', index, code: DiagnosticCode.StereotypeNotApplicable });
+                } else {
+                    seen.set(f.name, s);
+                }
+            }
+            applied.add(s);
+        });
+    }
+
+    /** A datatype's value: known fields, each set once and fitting its type, and the required ones set. */
+    private checkRecord(record: RecordValue, datatype: DataTypeDecl, accept: ValidationAcceptor): void {
+        const features = new Map<string, Feature>(datatype.features.map(f => [f.name, f]));
+        const given = new Set<string>();
+        for (const slot of record.slots) {
+            if (given.has(slot.name)) {
+                accept('error', `Field '${slot.name}' is set more than once.`,
+                    { node: slot, property: 'name', code: DiagnosticCode.DuplicateSlot });
+            }
+            given.add(slot.name);
+            this.checkSlot(datatype, slot, features, accept);
+        }
+        for (const f of datatype.features) {
+            if (!given.has(f.name) && isRequired(f)) {
+                accept('error', `This ${datatype.name} is missing required '${f.name}'.`,
+                    { node: record, code: DiagnosticCode.MissingRequired, data: { fix: f.name } });
+            }
+        }
+    }
+
+    private checkSlot(kind: Kind | DataTypeDecl, slot: Slot, features: Map<string, Feature>, accept: ValidationAcceptor): void {
         const f = features.get(slot.name);
         if (!f) {
             const fix = closest(slot.name, features.keys());
@@ -447,7 +529,7 @@ export class ArborValidator {
             const seen = new Set<string>();
             for (const v of items) {
                 const key = isRefValue(v) ? `->${v.target.ref ? elementId(v.target.ref as Element) : v.target.$refText}`
-                    : isListValue(v) ? '' : JSON.stringify(literalValue(v));
+                    : isListValue(v) ? '' : isRecordValue(v) ? `{${v.$cstNode?.text.replace(/\s+/g, ' ') ?? ''}` : JSON.stringify(literalValue(v));
                 if (key && seen.has(key)) {
                     accept('error', `'${slot.name}' is unique; this value is already in it.`,
                         { node: v, code: DiagnosticCode.DuplicateValue });
@@ -474,6 +556,15 @@ export class ArborValidator {
                 if (isRefValue(v) || isListValue(v)) {
                     accept('error', `'${slot.name}' expects a value, not a ${isRefValue(v) ? 'reference' : 'nested list'}.`,
                         { node: v, code: DiagnosticCode.TypeMismatch });
+                    continue;
+                }
+                // A datatype's value is a record of its fields, checked like an element's slots.
+                const datatype = datatypeOf(f);
+                if (isRecordValue(v) || datatype) {
+                    if (isRecordValue(v) && datatype) this.checkRecord(v, datatype, accept);
+                    else accept('error', datatype
+                        ? `'${slot.name}' takes ${datatype.name} values: write { field: value ... }.`
+                        : `'${slot.name}' expects a value, not { ... }.`, { node: v, code: DiagnosticCode.TypeMismatch });
                     continue;
                 }
                 const problem = checkLiteral(f, v);

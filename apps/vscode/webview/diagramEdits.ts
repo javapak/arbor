@@ -92,7 +92,7 @@ function disconnect(edge: Extract<DiagramEdit, { kind: 'edge-removed' }>['edge']
     }
     const index = new IRIndex(ir);
     const source = index.elements.get(edge.sourceNodeId);
-    const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.feature);
+    const slot = source && index.elementFeature(source, String(edge.data?.feature));
     if (!source || slot?.feature !== 'ref') return undo('');
     post({ type: 'set-slot', id: source.id, name: slot.name, value: withoutTarget(source, slot, edge.targetNodeId) });
 }

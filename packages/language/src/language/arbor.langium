@@ -19,7 +19,7 @@ entry Document: Profile | Model;
 
 Profile:
     'profile' name=ID ('version' version=STRING)? '{'
-        (kinds+=Kind | enums+=EnumDecl)*
+        (kinds+=Kind | enums+=EnumDecl | datatypes+=DataTypeDecl | stereotypes+=StereotypeDecl)*
     '}';
 
 Kind:
@@ -71,9 +71,11 @@ RedefinesClause:
 EdgeVisual:
     '{' (entries+=VisualEntry)* '}';
 
-TypeRef: PrimitiveTypeRef | EnumTypeRef;
+TypeRef: PrimitiveTypeRef | NamedTypeRef;
 PrimitiveTypeRef: primitive=('string' | 'int' | 'float' | 'bool');
-EnumTypeRef: enum=[EnumDecl:QualifiedName];
+// An enum or a datatype, by name.
+NamedTypeRef: decl=[TypeDecl:QualifiedName];
+TypeDecl: EnumDecl | DataTypeDecl;
 
 // [1]  [0..1]  [1..*]  [*]
 Multiplicity:
@@ -85,6 +87,18 @@ Visual:
 VisualEntry:
     key=FeatureName ':' value=Literal;
 
+// A UML stereotype: extra properties and references (tagged values), and visuals,
+// for elements of the kinds it extends, applied in models as `<<Entity>> Class Customer { ... }`.
+StereotypeDecl:
+    'stereotype' name=ID 'extends' metaclasses+=[Kind:QualifiedName] (',' metaclasses+=[Kind:QualifiedName])* '{'
+        (features+=Feature | visuals+=Visual)*
+    '}';
+
+// A structured value type (a UML DataType): values with fields and no identity,
+// written in place as `{ street: "Main St"  city: "Oslo" }`.
+DataTypeDecl:
+    'datatype' name=ID '{' (features+=PropFeature)* '}';
+
 EnumDecl:
     'enum' name=ID '{' literals+=EnumLiteral (',' literals+=EnumLiteral)* ','? '}';
 EnumLiteral:
@@ -93,7 +107,7 @@ EnumLiteral:
 // ======================================================================
 // Models (M1): one generic shape for every element of every domain.
 //
-//   <Kind> <Name>? (@"stable-id")? { slot: value  ...  <nested elements> }
+//   (<<Stereotype, ...>>)? <Kind> <Name>? (@"stable-id")? { slot: value  ...  <nested elements> }
 // ======================================================================
 
 Model:
@@ -104,6 +118,7 @@ Model:
 // The name may be left out (a UML generalization, say): such an element can't be
 // referenced by name, and its ID is `<parent>.<Kind>#<n>` unless it has a stable one.
 Element:
+    (('<<' | '«') stereotypes+=[StereotypeDecl:QualifiedName] (',' stereotypes+=[StereotypeDecl:QualifiedName])* ('>>' | '»'))?
     kind=[Kind:QualifiedName] name=ID? ('@' stableId=STRING)? '{'
         (slots+=Slot | children+=Element)*
     '}';
@@ -111,9 +126,11 @@ Element:
 Slot:
     name=FeatureName ':' value=Value;
 
-Value: Literal | RefValue | ListValue;
+Value: Literal | RefValue | ListValue | RecordValue;
 RefValue: '->' target=[Element:QualifiedName];
 ListValue: '[' (items+=Value (',' items+=Value)*)? ']';
+// A datatype's value: its fields, like an element's slots.
+RecordValue: '{' (slots+=Slot)* '}';
 
 Literal: StringLit | NumberLit | BoolLit | IdLit;
 StringLit: value=STRING;
@@ -130,7 +147,7 @@ FeatureName returns string:
     ID | 'version' | 'kind' | 'model' | 'profile' | 'visual' | 'enum'
        | 'abstract' | 'extends' | 'prop' | 'contains' | 'ref'
        | 'string' | 'int' | 'float' | 'bool'
-       | 'ordered' | 'unique' | 'readonly' | 'derived' | 'opposite' | 'subsets' | 'redefines';
+       | 'ordered' | 'unique' | 'readonly' | 'derived' | 'opposite' | 'subsets' | 'redefines' | 'datatype' | 'stereotype';
 
 // ======================================================================
 // Terminals

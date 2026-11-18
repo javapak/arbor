@@ -15,7 +15,7 @@ import {
     type AstNode, type AstNodeDescription, type AstNodeLocator, type LangiumCoreServices, type LangiumDocument,
     type LangiumDocuments, type ReferenceInfo, type Scope, type Stream
 } from 'langium';
-import { Element, Model, isElement, isEnumDecl, isKind, isModel, isProfile } from './generated/ast.js';
+import { Element, Model, isDataTypeDecl, isElement, isEnumDecl, isKind, isModel, isProfile, isStereotypeDecl } from './generated/ast.js';
 
 /** Exports kinds/enums as `Name` and `profile.Name`, top-level elements as `Name` and `model.Name`. */
 export class ArborScopeComputation extends DefaultScopeComputation {
@@ -118,7 +118,7 @@ function walk(el: Element, path: string[]): Element | undefined {
 
 /** `profile.Name` for kinds and enums, `model.Name` for top-level elements. */
 export function qualifiedName(node: AstNode | undefined): string | undefined {
-    if ((isKind(node) || isEnumDecl(node)) && isProfile(node.$container)) return `${node.$container.name}.${node.name}`;
-    if (isElement(node) && isModel(node.$container)) return `${node.$container.name}.${node.name}`;
+    if ((isKind(node) || isEnumDecl(node) || isDataTypeDecl(node) || isStereotypeDecl(node)) && isProfile(node.$container)) return `${node.$container.name}.${node.name}`;
+    if (isElement(node) && node.name && isModel(node.$container)) return `${node.$container.name}.${node.name}`;
     return undefined;
 }

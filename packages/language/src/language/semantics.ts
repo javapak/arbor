@@ -7,8 +7,8 @@
  */
 import { AstUtils } from 'langium';
 import {
-    isElement, isModel, isProfile, isPropFeature,
-    type Element, type EnumDecl, type Feature, type Kind, type Literal, type Multiplicity,
+    isDataTypeDecl, isElement, isEnumDecl, isModel, isProfile, isPropFeature,
+    type DataTypeDecl, type Element, type StereotypeDecl, type EnumDecl, type Feature, type Kind, type Literal, type Multiplicity,
     type PropFeature, type ContainsFeature
 } from './generated/ast.js';
 
@@ -67,6 +67,23 @@ export function allFeatures(kind: Kind): Map<string, Feature> {
         }
     }
     return byName;
+}
+
+/**
+ * An element's features: its kind's, then those of the stereotypes applied to
+ * it (a name its kind already has stays the kind's; clashes are reported).
+ */
+export function elementFeatures(el: Element): Map<string, Feature> {
+    const out = el.kind.ref ? allFeatures(el.kind.ref) : new Map<string, Feature>();
+    for (const s of el.stereotypes) {
+        for (const f of s.ref?.features ?? []) if (!out.has(f.name)) out.set(f.name, f);
+    }
+    return out;
+}
+
+/** Whether a stereotype applies to elements of `kind`: it extends that kind or one of its ancestors. */
+export function stereotypeApplies(stereotype: StereotypeDecl, kind: Kind): boolean {
+    return stereotype.metaclasses.some(m => m.ref && isA(kind, m.ref));
 }
 
 // ------------------------------------------------------------ feature modifiers
@@ -151,9 +168,11 @@ export function literalValue(l: Literal): Scalar {
 /** Returns an error message if the literal does not fit the property type. */
 export function checkLiteral(prop: PropFeature, l: Literal): string | undefined {
     const t = prop.type;
-    if (t.$type === 'EnumTypeRef') {
-        const e: EnumDecl | undefined = t.enum.ref;
-        if (l.$type !== 'IdLit') return `expected a literal of enum ${t.enum.$refText}`;
+    if (t.$type === 'NamedTypeRef') {
+        const decl = t.decl.ref;
+        if (isDataTypeDecl(decl)) return `expected ${decl.name} values: { field: value ... }`;
+        const e: EnumDecl | undefined = isEnumDecl(decl) ? decl : undefined;
+        if (l.$type !== 'IdLit') return `expected a literal of enum ${t.decl.$refText}`;
         if (e && !e.literals.some(x => x.name === l.value)) {
             return `'${l.value}' is not a literal of ${e.name} (${e.literals.map(x => x.name).join(', ')})`;
         }
@@ -175,7 +194,14 @@ export function kindId(kind: Kind): string {
     return `${profile?.name ?? '_'}.${kind.name}`;
 }
 
-export function enumId(e: EnumDecl): string {
+/** The datatype a property's values are records of, if its type is one. */
+export function datatypeOf(prop: PropFeature): DataTypeDecl | undefined {
+    const decl = prop.type.$type === 'NamedTypeRef' ? prop.type.decl.ref : undefined;
+    return isDataTypeDecl(decl) ? decl : undefined;
+}
+
+/** Qualified as `<profile>.<name>`, for enums and datatypes alike. */
+export function enumId(e: EnumDecl | DataTypeDecl | StereotypeDecl): string {
     const profile = AstUtils.getContainerOfType(e, isProfile);
     return `${profile?.name ?? '_'}.${e.name}`;
 }
@@ -193,7 +219,8 @@ export function elementId(el: Element): string {
 
 /**
  * The last segment of an element's ID: its name, or for an unnamed element
- * `<Kind>#<n>`, counting the unnamed siblings of that kind before it (from 1).
+ * `<Kind>#<n>`, counting the unnamed siblings of that kind before it (from 1;
+ * those with stable IDs don't count).
  * Reordering those siblings changes the ID, so give one a stable ID if
  * anything outside the text (a diagram's layout, another system) refers to it.
  */
@@ -201,7 +228,7 @@ export function localName(el: Element): string {
     if (el.name) return el.name;
     const kind = kindNameOf(el);
     const c = el.$container;
-    const siblings = (isElement(c) ? c.children : isModel(c) ? c.elements : []).filter(s => !s.name && kindNameOf(s) === kind);
+    const siblings = (isElement(c) ? c.children : isModel(c) ? c.elements : []).filter(s => !s.name && !s.stableId && kindNameOf(s) === kind);
     return `${kind}#${siblings.indexOf(el) + 1}`;
 }
 

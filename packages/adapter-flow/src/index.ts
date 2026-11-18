@@ -24,7 +24,7 @@
  * renderers. Keep them in step.
  */
 import {
-    IRIndex, OWNER_END, VISUAL_SHAPES, displayName,
+    IRIndex, OWNER_END, VISUAL_SHAPES, displayName, valueText,
     type EdgeMarker, type IRDocument, type IRElement, type IRFeature, type IRMultiplicity, type IRScalar, type IRVisual, type VisualShape
 } from '@arbor/ir';
 
@@ -181,11 +181,13 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
     const boxes = placeElements(doc, layout, index, defaultSize, nestedIn, compartments, drawn);
     for (const model of doc.models) {
         for (const el of model.elements) {
-            const v = index.visual(el.kind);
+            const v = index.elementVisual(el);
+            // Applied stereotypes go before the label, as in UML: «Entity» Customer.
+            const stereotyped = (label: string) => [index.stereotypeLabel(el), label].filter(Boolean).join(' ');
             const ends = asEdges.edges.get(el.id);
             if (ends) {
                 edge(el.id, ends.source, ends.target, 'element', edgeStyle(v, REFERENCE_STYLE), {
-                    label: typeof v.label === 'string' ? labelFor(el, v.label, index) : el.name,
+                    label: stereotyped(typeof v.label === 'string' ? labelFor(el, v.label, index) : el.name),
                     ...endLabels(v, t => labelFor(el, t, index))
                 });
             }
@@ -201,7 +203,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                 data: {
                     position: { x: pos.x, y: pos.y },
                     size,
-                    label: labelFor(el, v.label, index),
+                    label: boxes.isRow(el) ? labelFor(el, v.label, index) : stereotyped(labelFor(el, v.label, index)),
                     kind: el.kind,
                     name: el.name,
                     parentId: el.parent,
@@ -212,13 +214,14 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                     container: v.container === true,
                     // A member's kind is clear from where it is (every row in an Entity is a Column).
                     ...(boxes.isRow(el)
-                        ? { presentation: 'row' as const, ...(v.member === true ? {} : { detail: `«${kind?.name ?? el.kind}»` }) }
+                        ? { presentation: 'row' as const, ...(el.stereotypes?.length ? { detail: index.stereotypeLabel(el) }
+                            : v.member === true ? {} : { detail: `«${kind?.name ?? el.kind}»` }) }
                         : compartments.get(el.id)?.length ? { compartment: compartments.get(el.id) } : {})
                 }
             });
 
             const shown = labelSlots(v.label);
-            const features = new Map(index.features(el.kind).map(f => [f.name, f]));
+            const features = new Map(index.elementFeatures(el).map(f => [f.name, f]));
             for (const [feature, targets] of Object.entries(el.references)) {
                 if (shown.has(feature)) continue;   // written in the label, e.g. `id : UUID`
                 const f = features.get(feature);
@@ -489,17 +492,13 @@ function placeElements(
 /**
  * An element's compartment: each property written in its text (not the
  * profile's defaults; references are edges), in the order the kind declares
- * them, as `name = value`. Strings are quoted, enum literals and other values
- * written as in the text, lists in brackets.
+ * them, as `name = value`, the value as the text writes it (see `valueText`).
  */
 function propertyLines(el: IRElement, index: IRIndex): string[] {
     const lines: string[] = [];
-    for (const f of index.features(el.kind)) {
+    for (const f of index.elementFeatures(el)) {
         if (f.feature !== 'property' || !Object.hasOwn(el.properties, f.name)) continue;
-        const quoted = f.type === 'string';
-        const one = (v: IRScalar) => (quoted && typeof v === 'string' ? JSON.stringify(v) : String(v));
-        const value = el.properties[f.name];
-        const line = `${f.name} = ${Array.isArray(value) ? `[${value.map(one).join(', ')}]` : one(value)}`;
+        const line = `${f.name} = ${valueText(index, f.type, el.properties[f.name])}`;
         lines.push(line.length > MAX_LINE ? `${line.slice(0, MAX_LINE - 1)}…` : line);
     }
     return lines;

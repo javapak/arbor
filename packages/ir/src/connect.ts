@@ -12,7 +12,7 @@ import type { IRElement, IRReference } from './types.js';
  * Not derived or readonly ones: those aren't edited from a diagram.
  */
 export function referenceSlotsFor(index: IRIndex, source: IRElement, target: IRElement): IRReference[] {
-    return index.features(source.kind)
+    return index.elementFeatures(source)
         .filter((f): f is IRReference => f.feature === 'ref' && index.isA(target.kind, f.target) && !f.derived && !f.readonly);
 }
 

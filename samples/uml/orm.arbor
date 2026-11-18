@@ -1,0 +1,20 @@
+// A UML profile in the UML sense: stereotypes that mark classes and their
+// attributes for an object-relational mapper, with tagged values.
+profile orm version "0.1.0" {
+
+    // An index over some of a table's columns: a structured tagged value.
+    datatype Index {
+        prop columns: string [1..*]
+        prop unique:  bool = false
+    }
+
+    stereotype Entity extends uml.Class {
+        prop table:   string [1]
+        prop indexes: Index [0..*]
+        visual { color: "#f59e0b" }
+    }
+
+    stereotype Id extends uml.Property {
+        prop generated: bool = true
+    }
+}

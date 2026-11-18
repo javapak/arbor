@@ -100,7 +100,7 @@ async function disconnect(edge: Extract<DiagramEdit, { kind: 'edge-removed' }>['
   const s = useStudio.getState();
   const index = new IRIndex((await loadWorkspace(sources(s.files))).ir);
   const source = index.elements.get(edge.sourceNodeId);
-  const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.feature);
+  const slot = source && index.elementFeature(source, String(edge.data?.feature));
   if (!source || slot?.feature !== 'ref') return undo('');
   await setSlot(source.id, slot.name, withoutTarget(source, slot, edge.targetNodeId));
 }

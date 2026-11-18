@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Anchor, Group, Stack, Text } from '@mantine/core';
-import { IRIndex, displayName, slotSchema, slotValues, type IRDocument } from '@arbor/ir';
+import { IRIndex, displayName, slotSchema, slotText, slotValues, type IRDocument, type IRScalar } from '@arbor/ir';
 import { PropertyForm } from '@arbor/property-form';
 import { post } from './vscode';
 
@@ -12,7 +12,7 @@ import { post } from './vscode';
 export default function PropertiesPanel({ ir, id }: { ir: IRDocument | null; id: string | null }) {
     const index = useMemo(() => (ir ? new IRIndex(ir) : null), [ir]);
     const element = id ? index?.elements.get(id) : undefined;
-    const schema = useMemo(() => (index && element ? slotSchema(index, element.kind) : null), [index, element]);
+    const schema = useMemo(() => (index && element ? slotSchema(index, element) : null), [index, element]);
 
     if (!index || !element || !schema) {
         return <Text size="xs" c="dimmed" p="sm">Select one element in a diagram to edit its properties.</Text>;
@@ -21,6 +21,7 @@ export default function PropertiesPanel({ ir, id }: { ir: IRDocument | null; id:
         <Stack gap="xs" p="sm">
             <Group justify="space-between" wrap="nowrap">
                 <div style={{ minWidth: 0 }}>
+                    {element.stereotypes?.length ? <Text size="xs" c="dimmed" truncate>{index.stereotypeLabel(element)}</Text> : null}
                     <Text fw={600} truncate>{displayName(element)}</Text>
                     <Text size="xs" c="dimmed" truncate>{element.kind} · {element.id}</Text>
                 </div>
@@ -28,7 +29,9 @@ export default function PropertiesPanel({ ir, id }: { ir: IRDocument | null; id:
             </Group>
             {/* Keyed by element, so a half-typed value never carries over to another element. */}
             <PropertyForm key={element.id} schema={schema} values={slotValues(element, schema)}
-                onChange={(name, value) => post({ type: 'set-slot', id: element.id, name, value })} />
+                textOf={(name, value) => slotText(index, element, name, value)}
+                // Fields holding structured values are shown as text, never edited, so changes are scalars.
+                onChange={(name, value) => post({ type: 'set-slot', id: element.id, name, value: value as IRScalar | IRScalar[] | undefined })} />
         </Stack>
     );
 }

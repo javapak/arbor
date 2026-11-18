@@ -43,7 +43,7 @@ export interface WorkspaceResult {
     ir: IRDocument;
     /**
      * Keys: `profile:<name>`, `kind:<kindId>`, `feature:<kindId>.<name>`,
-     * `enum:<enumId>`, `literal:<enumId>.<name>`, `model:<name>`, and
+     * `datatype:<datatypeId>` and `stereotype:<stereotypeId>` (their features are `feature:<id>.<name>`), `enum:<enumId>`, `literal:<enumId>.<name>`, `model:<name>`, and
      * `element:<model>:<elementId>` (element IDs are unique per model only).
      */
     locations: Record<string, SourceLocation>;

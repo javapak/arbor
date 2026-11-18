@@ -13,7 +13,7 @@ const external = Annotation.define<boolean>();
 const KEYWORDS = new Set([
   'profile', 'model', 'kind', 'abstract', 'extends', 'prop', 'contains', 'ref', 'enum', 'visual', 'version',
   'string', 'int', 'float', 'bool', 'true', 'false',
-  'ordered', 'unique', 'readonly', 'derived', 'opposite', 'subsets', 'redefines',
+  'ordered', 'unique', 'readonly', 'derived', 'opposite', 'subsets', 'redefines', 'datatype', 'stereotype',
 ]);
 
 /** Highlighting only; parsing and checking are the language package's job. */

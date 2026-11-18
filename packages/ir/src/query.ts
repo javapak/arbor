@@ -1,4 +1,4 @@
-import type { IRDocument, IRElement, IRFeature, IRKind } from './types.js';
+import type { IRDataType, IRDocument, IRElement, IRFeature, IRKind, IRProperty, IRStereotype, IRValue } from './types.js';
 
 /**
  * How to show an element: its name, or `:Kind` for an unnamed one (as UML
@@ -8,16 +8,23 @@ export function displayName(element: IRElement): string {
     return element.name || `:${element.kind.split('.').pop()}`;
 }
 
+/** Visual keys that decide how an element is laid out rather than styled; stereotypes can't change them. */
+const STRUCTURAL_VISUALS = new Set(['container', 'member', 'source', 'target']);
+
 /**
  * Read helpers for consumers. Interpreted against the profile data at runtime:
  * no generated types, no eval.
  */
 export class IRIndex {
     readonly kinds = new Map<string, IRKind>();
+    readonly datatypes = new Map<string, IRDataType>();
+    readonly stereotypes = new Map<string, IRStereotype>();
     readonly elements = new Map<string, IRElement>();
 
     constructor(readonly doc: IRDocument) {
         for (const p of doc.profiles) for (const k of p.kinds) this.kinds.set(k.id, k);
+        for (const p of doc.profiles) for (const d of p.datatypes ?? []) this.datatypes.set(d.id, d);
+        for (const p of doc.profiles) for (const s of p.stereotypes ?? []) this.stereotypes.set(s.id, s);
         for (const m of doc.models) for (const e of m.elements) this.elements.set(e.id, e);
     }
 
@@ -59,6 +66,38 @@ export class IRIndex {
         return [...byName.values()];
     }
 
+    /** An element's features: its kind's, then those of the stereotypes applied to it, in order. */
+    elementFeatures(element: IRElement): IRFeature[] {
+        const own = this.features(element.kind);
+        const added = (element.stereotypes ?? []).flatMap(id => this.stereotypes.get(id)?.features ?? []);
+        return added.length ? [...own, ...added.filter(f => !own.some(o => o.name === f.name))] : own;
+    }
+
+    /** One feature of an element, by name (see `elementFeatures`). */
+    elementFeature(element: IRElement, name: string): IRFeature | undefined {
+        return this.elementFeatures(element).find(f => f.name === name);
+    }
+
+    /**
+     * An element's visuals: its kind's, restyled by its stereotypes', the last applied winning.
+     * How it is drawn structurally (nested, as a row, as an edge) stays its kind's.
+     */
+    elementVisual(element: IRElement): Record<string, string | number | boolean> {
+        const merged = this.visual(element.kind);
+        for (const id of element.stereotypes ?? []) {
+            for (const [key, value] of Object.entries(this.stereotypes.get(id)?.visual ?? {})) {
+                if (!STRUCTURAL_VISUALS.has(key)) merged[key] = value;
+            }
+        }
+        return merged;
+    }
+
+    /** The names of the stereotypes applied to an element, as UML shows them: `«Entity, Audited»`, or '' for none. */
+    stereotypeLabel(element: IRElement): string {
+        const names = (element.stereotypes ?? []).map(id => this.stereotypes.get(id)?.name ?? id.split('.').pop());
+        return names.length ? `«${names.join(', ')}»` : '';
+    }
+
     /** One feature of a kind, by name (see `features`). */
     feature(kindId: string, name: string): IRFeature | undefined {
         return this.features(kindId).find(f => f.name === name);
@@ -71,7 +110,7 @@ export class IRIndex {
     values(element: IRElement, name: string, seen = new Set<string>()): string[] {
         const out = new Set(element.references[name] ?? []);
         seen.add(name);
-        for (const f of this.features(element.kind)) {
+        for (const f of this.elementFeatures(element)) {
             if (f.feature === 'ref' && f.subsets?.includes(name) && !seen.has(f.name)) {
                 this.values(element, f.name, seen).forEach(v => out.add(v));
             }
@@ -97,11 +136,20 @@ export class IRIndex {
         if (!profile) return [];
         const owner = (id: string) => id.slice(0, id.indexOf('.'));
         const used = new Set<string>();
+        const typeOwner = (f: IRProperty) => (typeof f.type === 'object' ? owner('enum' in f.type ? f.type.enum : f.type.datatype) : undefined);
         for (const k of profile.kinds) {
             for (const id of k.extends) used.add(owner(id));
             for (const f of k.features) {
-                if (f.feature !== 'property') used.add(owner(f.target));
-                else if (typeof f.type === 'object') used.add(owner(f.type.enum));
+                const o = f.feature !== 'property' ? owner(f.target) : typeOwner(f);
+                if (o) used.add(o);
+            }
+        }
+        for (const d of profile.datatypes ?? []) for (const f of d.features) { const o = typeOwner(f); if (o) used.add(o); }
+        for (const s of profile.stereotypes ?? []) {
+            for (const id of s.extends) used.add(owner(id));
+            for (const f of s.features) {
+                const o = f.feature !== 'property' ? owner(f.target) : typeOwner(f);
+                if (o) used.add(o);
             }
         }
         used.delete(profileName);
@@ -111,7 +159,25 @@ export class IRIndex {
     /** Property value with the profile default applied. */
     get(element: IRElement, name: string): unknown {
         if (name in element.properties) return element.properties[name];
-        const f = this.features(element.kind).find(x => x.name === name);
+        const f = this.elementFeature(element, name);
         return f && f.feature === 'property' ? f.default : undefined;
     }
+}
+
+/**
+ * A property value as the text writes it: strings quoted, enum literals bare,
+ * lists in brackets, a datatype's value as `{ field: value  ... }`.
+ */
+export function valueText(index: IRIndex, type: IRProperty['type'], value: IRValue): string {
+    if (Array.isArray(value)) return `[${value.map(v => valueText(index, type, v)).join(', ')}]`;
+    if (typeof value === 'object') {
+        const fields = typeof type === 'object' && 'datatype' in type ? index.datatypes.get(type.datatype)?.features ?? [] : [];
+        const parts = Object.entries(value).map(([name, v]) => {
+            const f = fields.find(x => x.name === name);
+            return `${name}: ${f ? valueText(index, f.type, v) : JSON.stringify(v)}`;
+        });
+        return `{ ${parts.join('  ')} }`;
+    }
+    const bare = typeof type === 'object' && 'enum' in type;
+    return bare ? String(value) : JSON.stringify(value);
 }

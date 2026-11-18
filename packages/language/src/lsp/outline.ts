@@ -39,6 +39,14 @@ export function outline(docs: Array<{ uri: string; root: Document }>): Workspace
                 add(`kind:${kindId(kind)}`, uri, kind);
                 for (const f of kind.features) add(`feature:${kindId(kind)}.${f.name}`, uri, f);
             }
+            for (const st of root.stereotypes) {
+                add(`stereotype:${enumId(st)}`, uri, st);
+                for (const f of st.features) add(`feature:${enumId(st)}.${f.name}`, uri, f);
+            }
+            for (const d of root.datatypes) {
+                add(`datatype:${enumId(d)}`, uri, d);
+                for (const f of d.features) add(`feature:${enumId(d)}.${f.name}`, uri, f);
+            }
             for (const e of root.enums) {
                 add(`enum:${enumId(e)}`, uri, e);
                 for (const l of e.literals) add(`literal:${enumId(e)}.${l.name}`, uri, l);

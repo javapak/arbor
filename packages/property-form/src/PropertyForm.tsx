@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActionIcon, Group, MultiSelect, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Tooltip } from '@mantine/core';
-import type { FieldSchema, IRScalar, ListSchema, ScalarSchema, SlotSchema, SlotValues } from '@arbor/ir';
+import type { FieldSchema, IRScalar, IRValue, ListSchema, ScalarSchema, SlotSchema, SlotValues } from '@arbor/ir';
 
-type Value = IRScalar | IRScalar[];
+type Value = IRValue;
 
 export interface PropertyFormProps {
     /** From `slotSchema(ir, element.kind)`. */
@@ -15,6 +15,8 @@ export interface PropertyFormProps {
      */
     onChange: (name: string, value: Value | undefined) => void;
     readOnly?: boolean;
+    /** A slot's value as the text writes it, for fields shown as text (`x-arbor-text`, a datatype's values): `slotText`. */
+    textOf?: (name: string, value: Value) => string;
 }
 
 /**
@@ -22,14 +24,14 @@ export interface PropertyFormProps {
  * schema describes, so a host can use it next to the text: every change goes
  * back through `onChange`, and new `values` come back once the text is reparsed.
  */
-export default function PropertyForm({ schema, values, onChange, readOnly }: PropertyFormProps) {
+export default function PropertyForm({ schema, values, onChange, readOnly, textOf }: PropertyFormProps) {
     const names = Object.keys(schema.properties);
     if (names.length === 0) return <Text size="sm" c="dimmed">{schema.title} has no properties or references.</Text>;
     return (
         <Stack gap="xs">
             {names.map(name => (
                 <Field key={name} name={name} schema={schema.properties[name]} value={values[name]}
-                    required={schema.required.includes(name)} readOnly={readOnly || schema.properties[name].readOnly}
+                    required={schema.required.includes(name)} readOnly={readOnly || schema.properties[name].readOnly} textOf={textOf}
                     onChange={v => onChange(name, v)} />
             ))}
         </Stack>
@@ -42,12 +44,15 @@ interface FieldProps<S extends FieldSchema = FieldSchema> {
     value: Value | undefined;
     required: boolean;
     readOnly?: boolean;
+    textOf?: (name: string, value: Value) => string;
     onChange: (value: Value | undefined) => void;
 }
 
 function Field(props: FieldProps) {
     const { schema, value, required, readOnly, onChange } = props;
-    const control = schema.type === 'array' ? listControl(props as FieldProps<ListSchema>) : scalarControl(props as FieldProps<ScalarSchema>);
+    const shownAsText = schema.type === 'array' ? schema.items['x-arbor-text'] : schema['x-arbor-text'];
+    const control = shownAsText ? textControl(props)
+        : schema.type === 'array' ? listControl(props as FieldProps<ListSchema>) : scalarControl(props as FieldProps<ScalarSchema>);
     const written = value !== undefined;
     return (
         <Group gap={4} wrap="nowrap" align="flex-end">
@@ -77,6 +82,13 @@ function description(schema: FieldSchema): string | undefined {
 }
 
 const placeholder = (s: { default?: IRScalar }) => (s.default !== undefined ? `default: ${String(s.default)}` : undefined);
+
+/** A value the form can't edit (a datatype's), as the text writes it. */
+function textControl(props: FieldProps) {
+    const { schema, value, textOf, name } = props;
+    const text = value === undefined ? '' : textOf ? textOf(name, value) : JSON.stringify(value);
+    return <TextInput label={label(props)} description={description(schema) ?? 'Edit in the text'} size="xs" readOnly value={text} />;
+}
 
 function scalarControl(props: FieldProps<ScalarSchema>) {
     const { schema, value, readOnly, onChange } = props;

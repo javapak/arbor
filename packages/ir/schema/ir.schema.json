@@ -24,14 +24,49 @@
     },
     "profile": {
       "type": "object",
-      "required": ["name", "kinds", "enums"],
+      "required": ["name", "kinds", "enums", "datatypes", "stereotypes"],
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
         "version": { "type": "string" },
         "kinds": { "type": "array", "items": { "$ref": "#/$defs/kind" } },
-        "enums": { "type": "array", "items": { "$ref": "#/$defs/enum" } }
+        "enums": { "type": "array", "items": { "$ref": "#/$defs/enum" } },
+        "datatypes": { "type": "array", "items": { "$ref": "#/$defs/datatype" } },
+        "stereotypes": { "type": "array", "items": { "$ref": "#/$defs/stereotype" } }
       }
+    },
+    "stereotype": {
+      "type": "object",
+      "required": ["id", "name", "extends", "features", "visual"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "extends": { "type": "array", "items": { "type": "string" } },
+        "features": { "type": "array", "items": { "$ref": "#/$defs/feature" } },
+        "visual": { "type": "object", "additionalProperties": { "$ref": "#/$defs/scalar" } }
+      }
+    },
+    "datatype": {
+      "type": "object",
+      "required": ["id", "name", "features"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "features": { "type": "array", "items": { "$ref": "#/$defs/feature" } }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/value" }
+    },
+    "value": {
+      "oneOf": [
+        { "$ref": "#/$defs/scalar" },
+        { "$ref": "#/$defs/record" },
+        { "type": "array", "items": { "oneOf": [{ "$ref": "#/$defs/scalar" }, { "$ref": "#/$defs/record" }] } }
+      ]
     },
     "enum": {
       "type": "object",
@@ -73,6 +108,12 @@
                   "required": ["enum"],
                   "additionalProperties": false,
                   "properties": { "enum": { "type": "string" } }
+                },
+                {
+                  "type": "object",
+                  "required": ["datatype"],
+                  "additionalProperties": false,
+                  "properties": { "datatype": { "type": "string" } }
                 }
               ]
             },
@@ -126,15 +167,11 @@
         "kind": { "type": "string" },
         "parent": { "type": ["string", "null"] },
         "containedIn": { "type": ["string", "null"] },
+        "stereotypes": { "type": "array", "items": { "type": "string" } },
         "children": { "type": "array", "items": { "type": "string" } },
         "properties": {
           "type": "object",
-          "additionalProperties": {
-            "oneOf": [
-              { "$ref": "#/$defs/scalar" },
-              { "type": "array", "items": { "$ref": "#/$defs/scalar" } }
-            ]
-          }
+          "additionalProperties": { "$ref": "#/$defs/value" }
         },
         "references": {
           "type": "object",
