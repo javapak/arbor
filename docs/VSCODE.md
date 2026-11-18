@@ -38,9 +38,10 @@ At the top right of the canvas:
 
 - **Fit to view** frames the whole model.
 - **Lay out automatically** arranges the model: layered (left to right or top to
-  bottom), tree, organic, force-directed, or packed boxes. The result is saved
-  to the view file like a move, so undoing it means moving nodes back, or
-  restoring the view file.
+  bottom), tree, organic, force-directed, or packed boxes. Edges are routed
+  around the nodes with right-angle bends, and those into containers around
+  what's inside them. The result is saved to the view file like a move, so
+  undoing it means moving nodes back, or restoring the view file.
 
 ![The layout menu](images/vscode/layout-menu.png)
 
@@ -64,13 +65,20 @@ that shape at the left of the header instead, and so does an SVG or emoji. A
 node with neither keeps its kind's shape (`Payments` above).
 
 **Containment.** By default an element is joined to what it contains by a
-composition edge (◆), as `Customer` is to its columns. A kind whose visual sets
-`container: true` draws its contents inside itself instead, as `Package` and
-`Component` do in the `software` profile:
+composition edge (◆). It is drawn inside its owner instead when the owner's kind
+sets `container: true` (as `Package` and `Component` do in the `software`
+profile), or when its own kind sets `member: true`: `Field`, and so `Column`,
+are members, so an Entity's columns are rows in its box, like a UML class's
+attributes:
 
 - An element that holds no nested elements of its own is a **row**: an icon
-  (its kind's shape or SVG), its name, and its kind as a UML stereotype,
-  `«Entity»`. A row doesn't list its properties.
+  (its kind's shape or SVG), its label, and its kind as a UML stereotype,
+  `«Entity»` (not for members, whose kind is clear from their owner). A row
+  doesn't list its properties.
+- A label can show slots: `Field`'s is `"{name} : {type}"`, so a column reads
+  `id : UUID`, and `buyer : User` for a foreign key. A reference shown in the
+  label isn't also drawn as an edge; any other reference of the row is, from
+  its end.
 - An element that does hold nested elements is a box of its own, inside.
 - A container arranges its contents in the text's order, in columns of up to 8
   rows, and sizes itself to hold them. It has no resize handles, and its
@@ -80,8 +88,10 @@ composition edge (◆), as `Customer` is to its columns. A kind whose visual set
 meets a row at its left or right end, whichever faces the other node. Where
 several edges would meet one side of a node at the same spot, their ends are
 spread along it, in the order the edges arrive, so their markers don't overlap
-(on a crowded row end, the markers also shrink to fit). Edges leaving a
-container are drawn over it.
+(on a crowded row end, the markers also shrink to fit). Where two edges
+cross, the more horizontal one hops over the other with a small arc, so a
+crossing never looks like a junction. Edges leaving a container are drawn over
+it.
 
 **Moving.** Dragging a top-level node moves it; dragging a container moves its
 contents with it. An element inside a container goes back where it was when you

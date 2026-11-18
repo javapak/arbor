@@ -33,10 +33,11 @@ export const VISUAL_KEYS = {
     color:      { type: 'string', format: 'hex-color', description: 'fill color' },
     labelColor: { type: 'string', format: 'hex-color', description: 'label text color' },
     iconColor:  { type: 'string', format: 'hex-color', description: 'icon color' },
-    label:      { type: 'string', description: 'label template; {name} and {kind} are substituted' },
+    label:      { type: 'string', description: 'label template: {name}, {kind}, or any slot ({type} gives a reference target\'s name)' },
     width:      { type: 'number', description: 'default width' },
     height:     { type: 'number', description: 'default height' },
-    container:  { type: 'bool', description: 'the node groups its children' }
+    container:  { type: 'bool', description: 'the node draws the elements it contains inside itself' },
+    member:     { type: 'bool', description: 'drawn inside whatever contains it, as a row (like a UML attribute)' }
 } as const satisfies Record<string, VisualKeySpec>;
 export type VisualKey = keyof typeof VISUAL_KEYS;
 

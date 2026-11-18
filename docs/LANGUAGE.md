@@ -38,8 +38,10 @@ profile persistence version "0.1.0" {
   - `shape`: `rectangle`, `roundedRectangle`, `circle`, `oval`, `diamond`, `hexagon`, `package`, `actor`, `initialNode`, `finalNode`, `none`. Unknown shapes draw as `rectangle`.
   - `svg`: inline SVG markup (use single quotes inside it). `image`: an image URL. Without a `shape` the SVG or image *is* the node; with one, it is drawn on the shape. `tint: true` colors an SVG with the node `color`.
   - `icon`: an emoji drawn on the node.
-  - `color`, `labelColor`, `iconColor` (hex), `label` (`{name}`, `{kind}`), `width`, `height`.
+  - `color`, `labelColor`, `iconColor` (hex), `width`, `height`.
+  - `label`: a template with `{name}`, `{kind}`, or any slot: a property's value, or a reference's target names (`"{name} : {type}"`). A reference the label shows isn't also drawn as an edge.
   - `container: true`: the diagram draws the elements this kind contains inside it, as rows (or nested boxes), instead of as composition edges. See [VSCODE.md](VSCODE.md#how-elements-are-drawn).
+  - `member: true`: elements of this kind are drawn inside whatever contains them, as rows, like a UML class's attributes (`software.Field`, and so `persistence.Column`).
 
 ## Models
 

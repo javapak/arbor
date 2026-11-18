@@ -1,11 +1,12 @@
 /**
  * Emitter: IR -> nodes/edges for the WebGPU flow renderer (webgpu-flow).
  *
- * Knows only the IR, never Langium. References become edges. Containment is
- * drawn nested when the owner's kind is a `container` (the child names it as
- * `parentId`, and the renderer arranges it inside: as a row, an icon and a
- * label, unless it holds nested elements itself), and as composition edges
- * otherwise. Properties written in the text are listed under the node's
+ * Knows only the IR, never Langium. References become edges, except those a
+ * node's label already shows (`label: "{name} : {type}"`). Containment is
+ * drawn nested when the owner's kind is a `container` or the element's kind a
+ * `member` (the child names its owner as `parentId`, and the renderer arranges
+ * it inside: as a row, an icon and a label, unless it holds nested elements
+ * itself), and as composition edges otherwise. Properties written in the text are listed under the node's
  * header, one `name = value` line each, like a UML class's attributes (rows
  * leave them out). The profile's
  * `visual` block becomes node visuals: a built-in SDF `shape`, or an `svg` /
@@ -71,7 +72,7 @@ export interface FlowNode {
         container: boolean;
         /** 'row': drawn in its container as an icon and a label on one line. */
         presentation?: 'row';
-        /** Text at the right end of a row: the kind's name as a UML stereotype, «Entity». */
+        /** Text at the right end of a row: the kind's name as a UML stereotype, «Entity» (not for members). */
         detail?: string;
         /** Lines listed under the header: the properties written in the text, `name = value`. */
         compartment?: string[];
@@ -171,7 +172,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                 data: {
                     position: { x: pos.x, y: pos.y },
                     size,
-                    label: labelFor(el, v.label),
+                    label: labelFor(el, v.label, index),
                     kind: el.kind,
                     name: el.name,
                     parentId: el.parent,
@@ -180,13 +181,16 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                 visual: {
                     ...kindVisual(v, size, contentSize),
                     container: v.container === true,
+                    // A member's kind is clear from where it is (every row in an Entity is a Column).
                     ...(boxes.isRow(el)
-                        ? { presentation: 'row' as const, detail: `«${kind?.name ?? el.kind}»` }
+                        ? { presentation: 'row' as const, ...(v.member === true ? {} : { detail: `«${kind?.name ?? el.kind}»` }) }
                         : compartments.get(el.id)?.length ? { compartment: compartments.get(el.id) } : {})
                 }
             });
 
+            const shown = labelSlots(v.label);
             for (const [feature, targets] of Object.entries(el.references)) {
+                if (shown.has(feature)) continue;   // written in the label, e.g. `id : UUID`
                 for (const t of targets) edge(`${el.id}--${feature}->${t}`, el.id, t, feature, 'reference');
             }
             if (mode === 'edges' && el.parent && !owner) {
@@ -236,10 +240,27 @@ function kindSize(v: Record<string, IRScalar>, fallback: { width: number; height
     };
 }
 
-/** `label` in the profile may use {name} and {kind}. Plain substitution; no evaluation. */
-function labelFor(el: IRElement, template: unknown): string {
+/**
+ * `label` in the profile may use {name}, {kind}, and any slot of the element:
+ * a property's value, or the names of a reference's targets. A slot that isn't
+ * set is left empty. Plain substitution; no evaluation.
+ */
+function labelFor(el: IRElement, template: unknown, index: IRIndex): string {
     if (typeof template !== 'string') return el.name;
-    return template.replace(/\{(name|kind)\}/g, (_, k) => (k === 'name' ? el.name : el.kind.split('.').pop() ?? ''));
+    return template.replace(/\{(\w+)\}/g, (_, k: string) => {
+        if (k === 'name') return el.name;
+        if (k === 'kind') return el.kind.split('.').pop() ?? '';
+        const targets = el.references[k];
+        if (targets) return targets.map(t => index.elements.get(t)?.name ?? t).join(', ');
+        const value = el.properties[k];
+        return value === undefined ? '' : Array.isArray(value) ? value.join(', ') : String(value);
+    }).trim();
+}
+
+/** The slots a label template shows (besides {name} and {kind}). */
+function labelSlots(template: unknown): Set<string> {
+    if (typeof template !== 'string') return new Set();
+    return new Set([...template.matchAll(/\{(\w+)\}/g)].map(m => m[1]).filter(k => k !== 'name' && k !== 'kind'));
 }
 
 function visualContentOf(v: Record<string, IRScalar>, px: number): VisualContent | undefined {
@@ -273,11 +294,12 @@ const MAX_LINE = 32;
 type Box = { x: number; y: number; width: number; height: number };
 type Size = { width: number; height: number };
 
-/** The owner an element is drawn inside: its owner, when the owner's kind is a container. */
+/** The owner an element is drawn inside: its owner, when the owner's kind is a container or the element's a member. */
 function containerOf(index: IRIndex): (el: IRElement) => string | undefined {
     return el => {
         const owner = el.parent ? index.elements.get(el.parent) : undefined;
-        return owner && index.visual(owner.kind).container === true ? owner.id : undefined;
+        if (!owner) return undefined;
+        return index.visual(owner.kind).container === true || index.visual(el.kind).member === true ? owner.id : undefined;
     };
 }
 

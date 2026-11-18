@@ -89,14 +89,45 @@ describe('IR -> flow graph', () => {
     });
 
     it('maps references to arrow edges and containment to composition edges', async () => {
-        const g = toFlowGraph(await shopIR(), { edgeLayout: { 'order.buyer--type->user': [{ x: 5, y: 5 }] } });
-        const ref = g.edges.find(e => e.sourceNodeId === 'order.buyer' && e.targetNodeId === 'user')!;
-        expect(ref.data).toEqual({ label: 'type', relation: 'reference' });
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: `profile p {
+                kind Box    { ref link: Box [0..1] }
+                kind Holder { contains items: Free [0..*] }
+                kind Free   {}
+            }` },
+            { uri: 'm.arbor', text: 'model m { Box a {} Box b { link: -> a } Holder h { Free f {} } }' }
+        ]);
+        expect(r.diagnostics).toEqual([]);
+        const g = toFlowGraph(r.ir, { edgeLayout: { 'm.b--link->m.a': [{ x: 5, y: 5 }] } });
+        const ref = g.edges.find(e => e.sourceNodeId === 'm.b' && e.targetNodeId === 'm.a')!;
+        expect(ref.data).toEqual({ label: 'link', relation: 'reference' });
         expect(ref.style.targetMarker).toBe('open-arrow');
         expect(ref.userVertices).toEqual([{ x: 5, y: 5 }]);
-        const own = g.edges.find(e => e.sourceNodeId === 'user' && e.targetNodeId === 'user.email')!;
-        expect(own.data).toEqual({ label: 'fields', relation: 'containment' });
+        const own = g.edges.find(e => e.sourceNodeId === 'm.h' && e.targetNodeId === 'm.h.f')!;
+        expect(own.data).toEqual({ label: 'items', relation: 'containment' });
         expect(own.style.sourceMarker).toBe('filled-diamond');
+    });
+
+    it('draws members in their owner as rows, labelled from their slots, without the edges the label shows', async () => {
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: `profile p {
+                kind Box  { contains parts: Part [0..*] }
+                kind Part {
+                    ref type:  Box [0..1]
+                    ref other: Box [0..1]
+                    visual { member: true  label: "{name} : {type}" }
+                }
+            }` },
+            { uri: 'm.arbor', text: 'model m { Box a { Part x { type: -> b  other: -> b } } Box b {} }' }
+        ]);
+        expect(r.diagnostics).toEqual([]);
+        const g = toFlowGraph(r.ir);
+        const x = g.nodes.find(n => n.id === 'm.a.x')!;
+        expect(x.parentId).toBe('m.a');
+        expect(x.data.label).toBe('x : b');
+        expect(x.visual.presentation).toBe('row');
+        expect(x.visual.detail).toBeUndefined();   // no «Part» on every row of a Box
+        expect(g.edges.map(e => e.id)).toEqual(['m.a.x--other->m.b']);
     });
 
     it('is a complete webgpu-flow diagram file with a palette of instantiable kinds', async () => {
