@@ -1,0 +1,13 @@
+# GitHub Pages: serve this folder (Settings → Pages → Deploy from a branch → /docs).
+# index.md is the entry point; links to the other .md files become .html pages.
+title: arbor
+description: A small, LLM-friendly meta-modeling language for software models, with text and diagram editing.
+theme: jekyll-theme-cayman
+markdown: kramdown
+kramdown:
+  auto_ids: true
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
