@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 import { WorkspaceRequests, type SourceLocation, type WorkspaceResult } from '@arbor/language/protocol';
-import { IRIndex, type IREnum, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile, type IRValue } from '@arbor/ir';
+import { IRIndex, displayName, type IREnum, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile, type IRValue } from '@arbor/ir';
 
 const REFRESH_DELAY_MS = 150;
 
@@ -169,13 +169,19 @@ abstract class OutlineTree implements vscode.TreeDataProvider<Node> {
                 return item(n.model.name, 'symbol-namespace', [count, used.length ? `uses ${used.join(', ')}` : ''].filter(Boolean).join(' · '));
             }
             case 'element': {
-                // Only a stable ID written on this element; children of one get `<parentId>.<name>` like any other.
-                const derived = `${n.element.parent ?? n.model.name}.${n.element.name}`;
-                const id = n.element.id !== derived ? ` · @"${n.element.id}"` : '';
-                return item(n.element.name, 'symbol-object', `${short(n.element.kind)}${id}`);
+                // Only a stable ID written on this element; children of one get `<parentId>.<name>` like any other
+                // (an unnamed one `<parentId>.<Kind>#<n>`).
+                const prefix = `${n.element.parent ?? n.model.name}.`;
+                const derived = n.element.name ? n.element.id === `${prefix}${n.element.name}`
+                    : n.element.id.startsWith(prefix) && /^\w+#\d+$/.test(n.element.id.slice(prefix.length));
+                const id = derived ? '' : ` · @"${n.element.id}"`;
+                return item(displayName(n.element), 'symbol-object', `${short(n.element.kind)}${id}`);
             }
             case 'slot': {
-                const names = (ids: string[]) => ids.map(id => `-> ${n.model.elements.find(e => e.id === id)?.name ?? id}`);
+                const names = (ids: string[]) => ids.map(id => {
+                    const target = n.model.elements.find(e => e.id === id);
+                    return `-> ${target ? displayName(target) : id}`;
+                });
                 const feature = this.outline.irIndex?.features(n.element.kind).find(f => f.name === n.name);
                 const isEnum = feature?.feature === 'property' && typeof feature.type === 'object';
                 const text = n.ref

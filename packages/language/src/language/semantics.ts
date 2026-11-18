@@ -187,8 +187,31 @@ export function enumId(e: EnumDecl): string {
 export function elementId(el: Element): string {
     if (el.stableId) return el.stableId;
     const c = el.$container;
-    if (isElement(c)) return `${elementId(c)}.${el.name}`;
-    return `${isModel(c) ? c.name : '_'}.${el.name}`;
+    if (isElement(c)) return `${elementId(c)}.${localName(el)}`;
+    return `${isModel(c) ? c.name : '_'}.${localName(el)}`;
+}
+
+/**
+ * The last segment of an element's ID: its name, or for an unnamed element
+ * `<Kind>#<n>`, counting the unnamed siblings of that kind before it (from 1).
+ * Reordering those siblings changes the ID, so give one a stable ID if
+ * anything outside the text (a diagram's layout, another system) refers to it.
+ */
+export function localName(el: Element): string {
+    if (el.name) return el.name;
+    const kind = kindNameOf(el);
+    const c = el.$container;
+    const siblings = (isElement(c) ? c.children : isModel(c) ? c.elements : []).filter(s => !s.name && kindNameOf(s) === kind);
+    return `${kind}#${siblings.indexOf(el) + 1}`;
+}
+
+/** How messages name an element: its name, or `an unnamed Generalization`. */
+export function displayName(el: Element): string {
+    return el.name ?? `an unnamed ${kindNameOf(el)}`;
+}
+
+function kindNameOf(el: Element): string {
+    return el.kind.ref?.name ?? el.kind.$refText.split('.').pop() ?? 'element';
 }
 
 // ------------------------------------------------------------ suggestions

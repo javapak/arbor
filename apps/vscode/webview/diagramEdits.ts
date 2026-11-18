@@ -1,5 +1,5 @@
 import type { DiagramEdit } from 'webgpu-flow';
-import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
+import { IRIndex, displayName, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import { useDiagramStore } from './store';
 import { post } from './vscode';
 
@@ -66,13 +66,13 @@ function connect(sourceId: string, targetId: string) {
     if (!source || !target) return undo('Edges connect elements; draw from one element to another.');
     const fitting = referenceSlotsFor(index, source, target);
     if (fitting.length === 0) {
-        return undo(`${source.name} has no reference that can point at ${target.name} (a ${target.kind.split('.').pop()}).`);
+        return undo(`${displayName(source)} has no reference that can point at ${displayName(target)} (a ${target.kind.split('.').pop()}).`);
     }
     const slots = fitting.flatMap(f => {
         const value = withTarget(source, f, targetId);
         return value === undefined ? [] : [{ name: f.name, value }];
     });
-    if (slots.length === 0) return undo(`${source.name} already points at ${target.name}.`);
+    if (slots.length === 0) return undo(`${displayName(source)} already points at ${displayName(target)}.`);
     // The new edge is drawn once the text has the reference; until then, the drawn one stays.
     post({ type: 'connect', id: sourceId, target: targetId, slots });
 }

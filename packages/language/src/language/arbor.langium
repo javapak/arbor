@@ -93,7 +93,7 @@ EnumLiteral:
 // ======================================================================
 // Models (M1): one generic shape for every element of every domain.
 //
-//   <Kind> <Name> (@"stable-id")? { slot: value  ...  <nested elements> }
+//   <Kind> <Name>? (@"stable-id")? { slot: value  ...  <nested elements> }
 // ======================================================================
 
 Model:
@@ -101,8 +101,10 @@ Model:
         (elements+=Element)*
     '}';
 
+// The name may be left out (a UML generalization, say): such an element can't be
+// referenced by name, and its ID is `<parent>.<Kind>#<n>` unless it has a stable one.
 Element:
-    kind=[Kind:QualifiedName] name=ID ('@' stableId=STRING)? '{'
+    kind=[Kind:QualifiedName] name=ID? ('@' stableId=STRING)? '{'
         (slots+=Slot | children+=Element)*
     '}';
 

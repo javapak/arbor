@@ -109,7 +109,8 @@ function itemSchema(
     f: Exclude<IRFeature, { feature: 'contains' }>, index: IRIndex, enums: Map<string, { literals: string[] }>
 ): Omit<ScalarSchema, 'title'> {
     if (f.feature === 'ref') {
-        const targets = [...index.elements.values()].filter(e => index.isA(e.kind, f.target));
+        // Only named elements: references go by name.
+        const targets = [...index.elements.values()].filter(e => e.name && index.isA(e.kind, f.target));
         return {
             type: 'string',
             oneOf: targets.map(e => ({ const: e.id, title: e.name })),

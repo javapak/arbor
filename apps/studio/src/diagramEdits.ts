@@ -1,6 +1,6 @@
 import type { DiagramEdit } from 'webgpu-flow';
 import { loadWorkspace, planAddElement, planRemoveElement, planSetSlot } from '@arbor/language';
-import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
+import { IRIndex, displayName, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import { sources, useStudio } from './store';
 
 /**
@@ -74,13 +74,13 @@ async function connect(sourceId: string, targetId: string) {
   if (!source || !target) return undo('Edges connect elements; draw from one element to another.');
   const fitting = referenceSlotsFor(index, source, target);
   if (fitting.length === 0) {
-    return undo(`${source.name} has no reference that can point at ${target.name} (a ${target.kind.split('.').pop()}).`);
+    return undo(`${displayName(source)} has no reference that can point at ${displayName(target)} (a ${target.kind.split('.').pop()}).`);
   }
   const open = fitting.filter(f => withTarget(source, f, targetId) !== undefined);
-  if (open.length === 0) return undo(`${source.name} already points at ${target.name}.`);
+  if (open.length === 0) return undo(`${displayName(source)} already points at ${displayName(target)}.`);
   let slot = open[0];
   if (open.length > 1) {
-    const answer = window.prompt(`Which reference of ${source.name} should point at ${target.name}? (${open.map(f => f.name).join(', ')})`, open[0].name);
+    const answer = window.prompt(`Which reference of ${displayName(source)} should point at ${displayName(target)}? (${open.map(f => f.name).join(', ')})`, open[0].name);
     const chosen = open.find(f => f.name === answer?.trim());
     if (!chosen) return undo('');
     slot = chosen;

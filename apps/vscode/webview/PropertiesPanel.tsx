@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Anchor, Group, Stack, Text } from '@mantine/core';
-import { IRIndex, slotSchema, slotValues, type IRDocument } from '@arbor/ir';
+import { IRIndex, displayName, slotSchema, slotValues, type IRDocument } from '@arbor/ir';
 import { PropertyForm } from '@arbor/property-form';
 import { post } from './vscode';
 
@@ -21,7 +21,7 @@ export default function PropertiesPanel({ ir, id }: { ir: IRDocument | null; id:
         <Stack gap="xs" p="sm">
             <Group justify="space-between" wrap="nowrap">
                 <div style={{ minWidth: 0 }}>
-                    <Text fw={600} truncate>{element.name}</Text>
+                    <Text fw={600} truncate>{displayName(element)}</Text>
                     <Text size="xs" c="dimmed" truncate>{element.kind} · {element.id}</Text>
                 </div>
                 <Anchor size="xs" component="button" onClick={() => post({ type: 'reveal', id: element.id })}>Show in text</Anchor>

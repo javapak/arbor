@@ -8,7 +8,7 @@
 import { AstUtils, GrammarUtils, type CstNode } from 'langium';
 import type { Document, Element, Kind, Model, PropFeature, RefFeature } from './language/generated/ast.js';
 import { isContainsFeature, isElement, isModel, isProfile, isRefFeature } from './language/generated/ast.js';
-import { allFeatures, bounds, elementId, isA, kindId } from './language/semantics.js';
+import { allFeatures, bounds, displayName, elementId, isA, kindId } from './language/semantics.js';
 import { buildDocuments, type Source } from './cli/load.js';
 
 /** Replace `length` characters at `offset` in the source named `uri` with `text`. */
@@ -123,7 +123,7 @@ export function planSetSlotIn(built: Built[], id: string, name: string, value: S
     if (!found) return { error: `no element with ID ${id}` };
     const { el, uri, text } = found;
     const kind = el.kind.ref;
-    if (!kind) return { error: `${el.name} has an unknown kind` };
+    if (!kind) return { error: `${displayName(el)} has an unknown kind` };
     const feature = allFeatures(kind).get(name);
     if (!feature || isContainsFeature(feature)) return { error: `${kind.name} has no property or reference ${name}` };
 
@@ -195,10 +195,15 @@ function refText(ref: RefFeature, target: string | number | boolean, from: Eleme
     if (!found) return { error: `no element with ID ${String(target)}` };
     const wanted = ref.target.ref;
     const kind = found.el.kind.ref;
-    if (wanted && kind && !isA(kind, wanted)) return { error: `${found.el.name} is not a ${wanted.name}` };
+    if (wanted && kind && !isA(kind, wanted)) return { error: `${displayName(found.el)} is not a ${wanted.name}` };
     const path: string[] = [];
     let node: Element | Model = found.el;
-    while (isElement(node)) { path.unshift(node.name); node = node.$container; }
+    while (isElement(node)) {
+        // References go by name, so an unnamed element (or one inside it) can't be pointed at.
+        if (!node.name) return { error: `${displayName(node)} has no name, so it can't be referenced` };
+        path.unshift(node.name);
+        node = node.$container;
+    }
     const sameModel = AstUtils.getContainerOfType(from, isModel) === node;
     return `-> ${sameModel ? '' : `${node.name}.`}${path.join('.')}`;
 }

@@ -1,0 +1,51 @@
+// A lending library as a UML class diagram (see uml.arbor).
+model library {
+
+    DataType String {}
+    DataType Date {}
+
+    Class Item {
+        isAbstract: true
+        Property title { type: -> String }
+        Operation checkOut { returns: -> Date }
+        InterfaceRealization lendable { contract: -> Lendable }
+    }
+
+    Class Book {
+        Property isbn { type: -> String }
+        Generalization item { general: -> Item }
+    }
+
+    Class Disc {
+        Property minutes { type: -> String }
+        Generalization item { general: -> Item }
+    }
+
+    Interface Lendable {
+        Operation lend { returns: -> Date }
+    }
+
+    Class Library {
+        Property name { type: -> String }
+    }
+
+    Class Member {
+        Property name { type: -> String }
+        Property since { type: -> Date }
+    }
+
+    Composition holdings {
+        from: -> Library  to: -> Item
+        toRole: "items"  toMultiplicity: "0..*"
+    }
+
+    Association loans {
+        from: -> Member  to: -> Item
+        fromRole: "borrower"  fromMultiplicity: "0..1"
+        toRole: "loans"  toMultiplicity: "0..*"
+    }
+
+    Dependency borrows {
+        client: -> Member  supplier: -> Lendable
+    }
+}

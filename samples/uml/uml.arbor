@@ -1,0 +1,95 @@
+// A small slice of UML class diagrams: classes with attribute and operation
+// rows, and generalizations, realizations, dependencies and associations
+// drawn as edges, each in its UML notation.
+
+profile uml version "0.1.0" {
+
+    abstract kind NamedElement {
+        prop description: string [0..1]
+    }
+
+    abstract kind PackageableElement extends NamedElement {}
+
+    kind Package extends PackageableElement {
+        contains members: PackageableElement [0..*]
+        visual { shape: "package" color: "#facc15" container: true }
+    }
+
+    // As in UML: attributes and operations are both members (a derived union),
+    // kept in order, and each knows its classifier (a derived opposite).
+    abstract kind Classifier extends PackageableElement {
+        prop             isAbstract:      bool = false
+        derived contains ownedMembers:    NamedElement [0..*]
+        ordered contains attributes:      Property [0..*] subsets ownedMembers
+        ordered contains operations:      Operation [0..*] subsets ownedMembers
+        contains         generalizations: Generalization [0..*]
+        contains         realizations:    InterfaceRealization [0..*]
+    }
+
+    kind Class extends Classifier {
+        visual { shape: "rectangle" color: "#0ea5e9" }
+    }
+
+    kind Interface extends Classifier {
+        visual { shape: "rectangle" color: "#22c55e" label: "«interface» {name}" }
+    }
+
+    kind DataType extends Classifier {
+        visual { shape: "rectangle" color: "#94a3b8" label: "«dataType» {name}" }
+    }
+
+    // Rows in their classifier's box, like UML compartments.
+    kind Property extends NamedElement {
+        derived ref classifier: Classifier [0..1] opposite attributes
+        ref  type:         Classifier [0..1]
+        prop multiplicity: string [0..1]
+        visual { member: true  label: "{name} : {type} {multiplicity}" }
+    }
+
+    kind Operation extends NamedElement {
+        derived ref classifier: Classifier [0..1] opposite operations
+        ref returns: Classifier [0..1]
+        visual { member: true  label: "{name}() : {returns}" }
+    }
+
+    // Relationships: elements drawn as edges. Owned by the specific classifier.
+    kind Generalization {
+        ref general: Classifier [1]
+        visual { source: "owner" target: "general" targetMarker: "triangle" label: "" }
+    }
+
+    kind InterfaceRealization {
+        ref contract: Interface [1]
+        visual { source: "owner" target: "contract" targetMarker: "triangle" line: "dashed" label: "" }
+    }
+
+    kind Dependency extends PackageableElement {
+        ref client:   NamedElement [1]
+        ref supplier: NamedElement [1]
+        visual { source: "client" target: "supplier" targetMarker: "arrow" line: "dashed" label: "«use»" }
+    }
+
+    kind Association extends PackageableElement {
+        ref  from:             Classifier [1]
+        ref  to:               Classifier [1]
+        prop fromRole:         string [0..1]
+        prop fromMultiplicity: string [0..1]
+        prop toRole:           string [0..1]
+        prop toMultiplicity:   string [0..1]
+        visual {
+            source: "from"  target: "to"  targetMarker: "arrow"
+            label: "{name}"
+            sourceLabel: "{fromRole} {fromMultiplicity}"
+            targetLabel: "{toRole} {toMultiplicity}"
+        }
+    }
+
+    // The whole owns its parts: a filled diamond at the whole's end.
+    kind Composition extends Association {
+        visual { sourceMarker: "filledDiamond" }
+    }
+
+    kind Aggregation extends Association {
+        visual { sourceMarker: "diamond" }
+    }
+}

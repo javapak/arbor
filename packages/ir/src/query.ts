@@ -1,6 +1,14 @@
 import type { IRDocument, IRElement, IRFeature, IRKind } from './types.js';
 
 /**
+ * How to show an element: its name, or `:Kind` for an unnamed one (as UML
+ * writes an anonymous instance).
+ */
+export function displayName(element: IRElement): string {
+    return element.name || `:${element.kind.split('.').pop()}`;
+}
+
+/**
  * Read helpers for consumers. Interpreted against the profile data at runtime:
  * no generated types, no eval.
  */

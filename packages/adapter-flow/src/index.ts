@@ -24,7 +24,7 @@
  * renderers. Keep them in step.
  */
 import {
-    IRIndex, OWNER_END, VISUAL_SHAPES,
+    IRIndex, OWNER_END, VISUAL_SHAPES, displayName,
     type EdgeMarker, type IRDocument, type IRElement, type IRFeature, type IRMultiplicity, type IRScalar, type IRVisual, type VisualShape
 } from '@arbor/ir';
 
@@ -371,7 +371,7 @@ function kindSize(v: Record<string, IRScalar>, fallback: { width: number; height
  * set is left empty. Plain substitution; no evaluation.
  */
 function labelFor(el: IRElement, template: unknown, index: IRIndex): string {
-    if (typeof template !== 'string') return el.name;
+    if (typeof template !== 'string') return displayName(el);
     return template.replace(/\{(\w+)\}/g, (_, k: string) => {
         if (k === 'name') return el.name;
         if (k === 'kind') return el.kind.split('.').pop() ?? '';

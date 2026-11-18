@@ -106,7 +106,7 @@ function modelToIR(m: Model): IRModel {
         const features = allFeatures(kind);
         const ir: IRElement = {
             id: elementId(el),
-            name: el.name,
+            name: el.name ?? '',   // unnamed: see localName
             kind: kindId(kind),
             parent: parent?.id ?? null,
             containedIn: null,

@@ -19,7 +19,7 @@ import type { ArborServices } from './arbor-module.js';
 import type { ArborScopeProvider } from './arbor-scope.js';
 import {
     allFeatures, bounds, checkLiteral, closest, containmentCandidates,
-    elementId, findInheritanceCycle, hasModifier, isA, isRequired, lineage, literalValue,
+    displayName, elementId, findInheritanceCycle, hasModifier, isA, isRequired, lineage, literalValue,
     oppositeOf, redefinesOf, subsetsOf
 } from './semantics.js';
 
@@ -379,7 +379,7 @@ export class ArborValidator {
 
         for (const f of features.values()) {
             if (!given.has(f.name) && isRequired(f)) {
-                accept('error', `${kind.name} ${el.name} is missing required '${f.name}'.`,
+                accept('error', `${kind.name} ${el.name ?? '(unnamed)'} is missing required '${f.name}'.`,
                     { node: el, property: 'name', code: DiagnosticCode.MissingRequired, data: { fix: f.name } });
             }
         }
@@ -406,7 +406,7 @@ export class ArborValidator {
             const values = back ? (isListValue(back.value) ? back.value.items : [back.value]) : [];
             const points = values.some(b => isRefValue(b) && b.target.ref && isElement(b.target.ref) && elementId(b.target.ref) === id);
             if (!points) {
-                accept('warning', `'${slot.name}' and '${name}' are opposites, but ${t.name}'s '${name}' doesn't point back at ${el.name}.`,
+                accept('warning', `'${slot.name}' and '${name}' are opposites, but ${displayName(t)}'s '${name}' doesn't point back at ${displayName(el)}.`,
                     { node: v, code: DiagnosticCode.OppositeMismatch, data: { element: elementId(t), slot: name } });
             }
         }
@@ -467,7 +467,7 @@ export class ArborValidator {
                 const target = v.target.ref;
                 const want = f.target.ref;
                 if (target && want && isElement(target) && target.kind.ref && !isA(target.kind.ref, want)) {
-                    accept('error', `'${slot.name}' must point to a ${want.name}, but ${target.name} is a ${target.kind.ref.name}.`,
+                    accept('error', `'${slot.name}' must point to a ${want.name}, but ${displayName(target)} is a ${target.kind.ref.name}.`,
                         { node: v, property: 'target', code: DiagnosticCode.RefTargetKind });
                 }
             } else {
