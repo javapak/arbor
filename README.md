@@ -1,6 +1,9 @@
 
-<div style="display:flex; flex-direction: column; align-items: center"><img src=https://www.svgrepo.com/show/481127/tree.svg alt="tree vector icon" width="150" />
-<h1>arbor</h1></div>
+<div align="center">
+  <img src="https://www.svgrepo.com/show/481127/tree.svg" alt="tree vector icon" width="150" />
+  <h1>arbor</h1>
+</div>
+
 A small, LLM-friendly meta-modeling language for software models, built on
 <a href=https://langium.org>Langium </a> (TypeScript, runs in Node and in a browser web
 worker, no JVM), with an intermediate representation (IR) as the hub between
