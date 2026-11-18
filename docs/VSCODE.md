@@ -24,8 +24,8 @@ Edits go both ways:
 - Dropping a kind from the **Add node** palette onto the canvas adds an element
   to the text; deleting a node removes it and everything nested in it.
 - Moving a node, resizing it and bending an edge only change the view file.
-  When you let go, a moved node's edges and a resized node's dragged edges snap
-  to the grid lines; hold **Alt** to place them freely. A container, which you
+  When you let go, a moved node's edges, a resized node's dragged edges and a
+  dragged bend point snap to the grid; hold **Alt** to place them freely. A container, which you
   can't resize, is sized in whole grid steps so its edges stay on the grid too.
 - Undo and save are the text editor's: the diagram follows the file.
 
