@@ -8,6 +8,11 @@ profile software version "0.1.0" {
         prop description: string [0..1]
     }
 
+    kind Package extends NamedElement {
+        contains elements: NamedElement [0..*]
+        visual { shape: "folder" color: "#facc15" container: true }
+    }
+
     abstract kind Type extends NamedElement {}
 
     kind DataType extends Type {

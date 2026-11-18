@@ -20,6 +20,10 @@ export default function DiagramPane() {
     const container = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 0, height: 0 });
     const fitPending = useRef(true);
+    // The properties view shows the selected element. A redraw clears the selection until the
+    // element is reselected; report the pending one meanwhile, so the form isn't torn down mid-typing.
+    const reported = selected.current ?? pendingSelect;
+    useEffect(() => post({ type: 'selection', id: reported }), [reported]);
 
     useEffect(() => {
         if (!ir) return;

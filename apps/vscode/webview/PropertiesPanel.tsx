@@ -1,24 +1,21 @@
 import { useMemo } from 'react';
 import { Anchor, Group, Stack, Text } from '@mantine/core';
-import { useDiagram } from 'webgpu-flow';
-import { IRIndex, slotSchema, slotValues } from '@arbor/ir';
+import { IRIndex, slotSchema, slotValues, type IRDocument } from '@arbor/ir';
 import { PropertyForm } from '@arbor/property-form';
-import { useDiagramStore } from './store';
 import { post } from './vscode';
 
 /**
- * The form for the selected element, generated from its kind. Each change is
- * sent to the host as a slot edit; the new values arrive with the next model.
+ * The form for the element selected in the active diagram, generated from its
+ * kind. Each change is sent to the host as a slot edit; the new values arrive
+ * with the next model.
  */
-export default function PropertiesPanel() {
-    const { selectedNodes } = useDiagram().interaction;
-    const ir = useDiagramStore(s => s.ir);
+export default function PropertiesPanel({ ir, id }: { ir: IRDocument | null; id: string | null }) {
     const index = useMemo(() => (ir ? new IRIndex(ir) : null), [ir]);
-    const element = selectedNodes.length === 1 ? index?.elements.get(selectedNodes[0].id) : undefined;
+    const element = id ? index?.elements.get(id) : undefined;
     const schema = useMemo(() => (index && element ? slotSchema(index, element.kind) : null), [index, element]);
 
     if (!index || !element || !schema) {
-        return <Text size="xs" c="dimmed" p="sm">Select one element to edit its properties.</Text>;
+        return <Text size="xs" c="dimmed" p="sm">Select one element in a diagram to edit its properties.</Text>;
     }
     return (
         <Stack gap="xs" p="sm">

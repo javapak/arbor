@@ -1,4 +1,4 @@
-// Bundles the extension host, the language server and the webview.
+// Bundles the extension host, the language server and the webviews.
 //   node build.mjs           one build
 //   node build.mjs --watch   rebuild on change
 // Run the root build first (`npm run build` at the repo root): the server and
@@ -35,8 +35,9 @@ const builds = [
     { ...node, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.cjs', external: ['vscode'] },
     { ...node, entryPoints: [require.resolve('@arbor/language/server-node')], outfile: 'dist/server.cjs' },
     {
-        entryPoints: ['webview/main.tsx'],
-        outfile: 'media/webview.js',
+        // The diagram editor's page, and the properties view's.
+        entryPoints: { webview: 'webview/main.tsx', properties: 'webview/properties.tsx' },
+        outdir: 'media',
         bundle: true,
         platform: 'browser',
         format: 'esm',

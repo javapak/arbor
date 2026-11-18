@@ -2,11 +2,21 @@ import * as vscode from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 import { DiagramRequests, type ModelResult } from '@arbor/language/protocol';
 import type { Planned, TextEdit } from '@arbor/language';
+import type { IRDocument } from '@arbor/ir';
 import type { HostMessage, WebviewMessage } from './protocol';
 import { ViewStore } from './viewStore';
+import { isDark, webviewPage } from './webviewPage';
 
 export const VIEW_TYPE = 'arbor.diagram';
 const REFRESH_DELAY_MS = 100;
+
+/** An open diagram as the properties view sees it: its model and selected element. */
+export interface DiagramSession {
+    readonly ir: IRDocument | null;
+    readonly selected: string | null;
+    /** Handles a message from the properties view as if this diagram had sent it. */
+    send(m: WebviewMessage): void;
+}
 
 /**
  * The diagram editor for `.arbor` files: a custom *text* editor, so VS Code
@@ -26,6 +36,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
                 webviewOptions: { retainContextWhenHidden: true },   // the renderer's GPU state is costly to rebuild
             }),
             documentsChanged(() => provider.open.forEach(e => e.refresh())),
+            provider.activeChanged,
         );
         return provider;
     }
@@ -34,6 +45,12 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
     private readonly open = new Map<string, { refresh: () => void; select: (id: string) => void }>();
     /** Elements to select in diagrams that are opening, sent once their webview is ready. */
     private readonly queuedSelect = new Map<string, string>();
+
+    /** The diagram last focused, while it is open. */
+    active: DiagramSession | undefined;
+    private readonly activeChanged = new vscode.EventEmitter<void>();
+    /** Fires when another diagram becomes active, or the active one's model or selection changes. */
+    readonly onDidChangeActive = this.activeChanged.event;
 
     private constructor(private readonly context: vscode.ExtensionContext, private readonly client: LanguageClient) {}
 
@@ -48,13 +65,20 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         const webview = panel.webview;
         const media = vscode.Uri.joinPath(this.context.extensionUri, 'media');
         webview.options = { enableScripts: true, localResourceRoots: [media] };
-        webview.html = html(webview, media);
+        webview.html = webviewPage(webview, media, 'webview', 'Arbor Diagram');
 
         const view = await ViewStore.open(document.uri);
         const uri = this.client.code2ProtocolConverter.asUri(document.uri);
         const post = (m: HostMessage) => void webview.postMessage(m);
         let ready = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
+        const ctx = { document, uri, view, post, refresh: () => { ready = true; refresh(); } };
+        const session = {
+            ir: null as IRDocument | null,
+            selected: null as string | null,
+            send: (m: WebviewMessage) => void this.handle(m, ctx),
+        };
+        const changed = () => { if (this.active === session) this.activeChanged.fire(); };
 
         const refresh = () => {
             if (!ready) return;
@@ -64,6 +88,8 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
                     const result = await this.client.sendRequest<ModelResult>(DiagramRequests.model, { uri });
                     const errors = vscode.languages.getDiagnostics(document.uri).filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
                     post({ type: 'model', ...result, errors });
+                    session.ir = result.kind === 'model' ? result.ir : null;
+                    changed();
                 } catch (e) {
                     post({ type: 'notice', text: `The language server couldn't build ${document.fileName}: ${String(e)}` });
                 }
@@ -71,6 +97,12 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         };
         const entry = { refresh, select: (id: string) => post({ type: 'select', id }) };
         this.open.set(document.uri.toString(), entry);
+        const activate = () => {
+            if (!panel.active || this.active === session) return;
+            this.active = session;
+            this.activeChanged.fire();
+        };
+        activate();
 
         const disposables: vscode.Disposable[] = [
             view,
@@ -78,11 +110,20 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
             vscode.window.onDidChangeActiveColorTheme(t => post({ type: 'theme', dark: isDark(t) })),
             // Diagnostics arrive after the rebuild notification; refresh so the error count catches up.
             vscode.languages.onDidChangeDiagnostics(e => { if (e.uris.some(u => u.toString() === document.uri.toString())) refresh(); }),
-            webview.onDidReceiveMessage((m: WebviewMessage) => void this.handle(m, { document, uri, view, post, refresh: () => { ready = true; refresh(); } })),
+            panel.onDidChangeViewState(activate),
+            webview.onDidReceiveMessage((m: WebviewMessage) => {
+                if (m.type !== 'selection') return void this.handle(m, ctx);
+                session.selected = m.id;
+                changed();
+            }),
         ];
         panel.onDidDispose(() => {
             clearTimeout(timer);
             if (this.open.get(document.uri.toString()) === entry) this.open.delete(document.uri.toString());
+            if (this.active === session) {
+                this.active = undefined;
+                this.activeChanged.fire();
+            }
             disposables.forEach(d => d.dispose());
         });
     }
@@ -158,39 +199,4 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
             post({ type: 'notice', text: `Couldn't edit ${target.fileName}; it may be read-only.`, resync: true });
         }
     }
-}
-
-function isDark(theme: vscode.ColorTheme): boolean {
-    return theme.kind === vscode.ColorThemeKind.Dark || theme.kind === vscode.ColorThemeKind.HighContrast;
-}
-
-/**
- * The webview page. No 'unsafe-eval' (the project's no-eval rule holds here too);
- * inline styles are allowed because Mantine injects its CSS variables at runtime.
- */
-function html(webview: vscode.Webview, media: vscode.Uri): string {
-    const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
-    const asset = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(media, name)).toString();
-    const csp = [
-        `default-src 'none'`,
-        `script-src 'nonce-${nonce}'`,
-        `style-src ${webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com`,
-        `font-src ${webview.cspSource} https://fonts.gstatic.com`,
-        `img-src ${webview.cspSource} data: blob:`,
-        `worker-src blob:`,
-    ].join('; ');
-    return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="${csp}">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="${asset('webview.css')}">
-  <title>Arbor Diagram</title>
-</head>
-<body>
-  <div id="root"></div>
-  <script nonce="${nonce}" type="module" src="${asset('webview.js')}"></script>
-</body>
-</html>`;
 }

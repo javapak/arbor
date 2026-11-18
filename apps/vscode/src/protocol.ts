@@ -38,4 +38,17 @@ export type WebviewMessage =
     | { type: 'remove-element'; id: string }
     | { type: 'set-slot'; id: string; name: string; value: IRScalar | IRScalar[] | undefined }
     /** Show the element in the text editor. */
-    | { type: 'reveal'; id: string };
+    | { type: 'reveal'; id: string }
+    /** The single selected element, or `null`; shown in the properties view. */
+    | { type: 'selection'; id: string | null };
+
+/**
+ * Messages between the host and the properties view, a side bar view that
+ * shows the form for the element selected in the active diagram.
+ */
+export type PropertiesHostMessage =
+    | { type: 'properties'; ir: IRDocument | null; id: string | null }
+    | { type: 'theme'; dark: boolean };
+
+/** What the properties view sends. The host handles edits as if the active diagram had sent them. */
+export type PropertiesMessage = Extract<WebviewMessage, { type: 'ready' | 'set-slot' | 'reveal' }>;
