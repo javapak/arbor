@@ -4,3 +4,4 @@ out/
 packages/language/src/language/generated/
 packages/language/syntaxes/
 
+apps/*/dist/

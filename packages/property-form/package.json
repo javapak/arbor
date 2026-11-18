@@ -1,0 +1,16 @@
+{
+  "name": "@arbor/property-form",
+  "version": "0.1.0",
+  "description": "React form for an element's slots, generated from the JSON Schema that @arbor/ir derives from its kind.",
+  "type": "module",
+  "main": "out/index.js",
+  "types": "out/index.d.ts",
+  "exports": { ".": "./out/index.js" },
+  "dependencies": {
+    "@arbor/ir": "0.1.0"
+  },
+  "peerDependencies": {
+    "@mantine/core": "^8.3.2",
+    "react": "^19.1.1"
+  }
+}

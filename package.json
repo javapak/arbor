@@ -6,18 +6,21 @@
     "packages/ir",
     "packages/language",
     "packages/adapter-flow",
-    "apps/studio"
+    "packages/property-form",
+    "apps/studio",
+    "apps/vscode"
   ],
   "scripts": {
     "setup": "npm i && cd packages/adapter-flow && npm i && cd ../ir && npm i && cd ../language && npm i && npm audit fix",
     "generate": "npm run generate -w @arbor/language",
-    "build": "npm run generate && tsc -b packages/ir packages/adapter-flow packages/language && cd apps/studio && npm run build",
+    "build": "npm run generate && tsc -b packages/ir packages/adapter-flow packages/language packages/property-form && cd apps/studio && npm run build",
     "test": "npm run build && vitest run",
     "lint": "eslint .",
     "ir": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js ir",
     "flow": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js flow",
     "check": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js check",
-    "studio": "npm run build && npm run dev -w @arbor/studio"
+    "studio": "npm run build && npm run dev -w @arbor/studio",
+    "extension": "npm run generate && tsc -b packages/ir packages/adapter-flow packages/language packages/property-form && npm run build -w arbor-vscode"
   },
   "devDependencies": {
     "@cfworker/json-schema": "^4.1.6",

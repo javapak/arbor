@@ -9,6 +9,8 @@ import { EmptyFileSystem } from 'langium';
 import { startLanguageServer } from 'langium/lsp';
 import { BrowserMessageReader, BrowserMessageWriter, createConnection } from 'vscode-languageserver/browser';
 import { createArborServices } from './language/arbor-module.js';
+import { registerDiagramRequests } from './lsp/diagram.js';
+import { registerOutlineRequests } from './lsp/outline.js';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -17,4 +19,6 @@ const writer = new BrowserMessageWriter(self);
 const connection = createConnection(reader, writer);
 
 const { shared } = createArborServices({ connection, ...EmptyFileSystem });
+registerDiagramRequests(shared, connection);
+registerOutlineRequests(shared, connection);
 startLanguageServer(shared);

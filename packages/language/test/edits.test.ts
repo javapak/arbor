@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyEdit, planAddElement, planRemoveElement, type TextEdit } from '../src/edits.js';
+import { applyEdit, planAddElement, planRemoveElement, planSetSlot, type SlotValue, type TextEdit } from '../src/edits.js';
 import { loadWorkspace } from '../src/cli/load.js';
 import { DiagnosticCode as C } from '../src/language/arbor-validator.js';
 import { PERSISTENCE, SHOP, SOFTWARE } from './helpers.js';
@@ -75,5 +75,72 @@ describe('planRemoveElement', () => {
 
     it('reports an unknown ID', async () => {
         expect(await planRemoveElement(sources(), 'shop.Nope')).toEqual({ error: 'no element with ID shop.Nope' });
+    });
+});
+
+describe('planSetSlot', () => {
+    /** Applies the planned edit and checks the result still loads without errors. */
+    async function set(id: string, name: string, value: SlotValue, src = sources()) {
+        const r = await planSetSlot(src, id, name, value);
+        if ('error' in r) throw new Error(r.error);
+        const next = apply(src, r);
+        const loaded = await loadWorkspace(next);
+        expect(loaded.diagnostics.filter(d => d.severity === 'error')).toEqual([]);
+        const element = loaded.ir.models[0].elements.find(e => e.id === id)!;
+        return { shop: next.at(-1)!.text, element, next };
+    }
+
+    it('replaces a written value in place', async () => {
+        const { shop, element } = await set('user.email', 'unique', false);
+        expect(shop).toContain('Column email { type: -> Text  unique: false  index: true }');
+        expect(element.properties.unique).toBe(false);
+    });
+
+    it('adds a slot on its own line after the last one in a block', async () => {
+        const { shop, element } = await set('order', 'schema', 'crm "eu"');
+        expect(shop).toContain('tableName: "orders"\n        schema: "crm \\"eu\\""\n');
+        expect(element.properties.schema).toBe('crm "eu"');
+    });
+
+    it('adds a slot inline when the element is on one line', async () => {
+        const { shop } = await set('user.id', 'index', true);
+        expect(shop).toContain('Column id    { type: -> UUID  unique: true  index: true }');
+    });
+
+    it('fills an empty element', async () => {
+        let src = sources();
+        const added = await planAddElement(src, 'software.Interface');
+        if ('error' in added) throw new Error(added.error);
+        src = apply(src, added.edit);
+        const { shop } = await set(added.elementId, 'description', 'new', src);
+        expect(shop).toContain('Interface Interface1 { description: "new" }');
+    });
+
+    it('removes a slot with its line, or inline with the spaces before it', async () => {
+        const a = await set('user', 'description', undefined);
+        expect(a.shop).not.toContain('description');
+        expect(a.shop).toContain('tableName: "users"\n\n        Column id');
+        const b = await set('user.id', 'unique', undefined);
+        expect(b.shop).toContain('Column id    { type: -> UUID }');
+    });
+
+    it('writes enum literals and references', async () => {
+        const a = await set('order.buyer', 'onDelete', 'setNull');
+        expect(a.shop).toContain('onDelete: setNull');
+        const b = await set('order.total', 'type', 'shop.Text');
+        expect(b.shop).toContain('Column total { type: -> Text }');
+        expect(b.element.references.type).toEqual(['shop.Text']);
+        const c = await set('shop.Checkout', 'requires', ['shop.Payments', 'shop.Checkout.OrderApi']);
+        expect(c.shop).toContain('requires: [-> Payments, -> Checkout.OrderApi]');
+        expect(c.element.references.requires).toEqual(['shop.Payments', 'shop.Checkout.OrderApi']);
+    });
+
+    it('refuses values that do not fit the feature', async () => {
+        const src = sources();
+        expect(await planSetSlot(src, 'user', 'readOnly', 'yes')).toEqual({ error: 'readOnly takes true or false' });
+        expect(await planSetSlot(src, 'order.buyer', 'onDelete', 'explode')).toEqual({ error: 'explode is not a literal of OnDeleteAction' });
+        expect(await planSetSlot(src, 'order.buyer', 'type', 'shop.Checkout')).toEqual({ error: 'Checkout is not a Type' });
+        expect(await planSetSlot(src, 'order', 'fields', [])).toEqual({ error: 'Entity has no property or reference fields' });
+        expect(await planSetSlot(src, 'nope', 'x', 1)).toEqual({ error: 'no element with ID nope' });
     });
 });

@@ -1,0 +1,254 @@
+{
+  "name": "arbor-vscode",
+  "displayName": "Arbor",
+  "description": "Arbor language support (Langium language server) with a diagram editor and a property form. Layout is kept in a .view.json file next to the model.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "arbor",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "arbor",
+        "aliases": [
+          "Arbor",
+          "arbor"
+        ],
+        "extensions": [
+          ".arbor"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "arbor",
+        "scopeName": "source.arbor",
+        "path": "./syntaxes/arbor.tmLanguage.json"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "arbor.diagram",
+        "displayName": "Arbor Diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.arbor"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "arbor.openDiagram",
+        "title": "Open Diagram",
+        "category": "Arbor",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "arbor.openDiagramToSide",
+        "title": "Open Diagram to the Side",
+        "category": "Arbor",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "arbor.openText",
+        "title": "Open Text",
+        "category": "Arbor",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "arbor.reveal",
+        "title": "Show in Text",
+        "category": "Arbor"
+      },
+      {
+        "command": "arbor.revealInDiagram",
+        "title": "Reveal in Diagram",
+        "category": "Arbor",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "arbor.openModelDiagram",
+        "title": "Open Diagram",
+        "category": "Arbor",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "arbor.refreshWorkspace",
+        "title": "Refresh",
+        "category": "Arbor",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "arbor.openDiagramToSide",
+          "when": "resourceLangId == arbor && activeEditor == workbench.editors.files.textFileEditor",
+          "group": "navigation"
+        },
+        {
+          "command": "arbor.openText",
+          "when": "activeCustomEditorId == arbor.diagram",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "arbor.openDiagram",
+          "when": "resourceExtname == .arbor",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "arbor.openDiagram",
+          "when": "resourceLangId == arbor || activeCustomEditorId == arbor.diagram"
+        },
+        {
+          "command": "arbor.openDiagramToSide",
+          "when": "resourceLangId == arbor"
+        },
+        {
+          "command": "arbor.openText",
+          "when": "activeCustomEditorId == arbor.diagram"
+        },
+        {
+          "command": "arbor.reveal",
+          "when": "false"
+        },
+        {
+          "command": "arbor.revealInDiagram",
+          "when": "false"
+        },
+        {
+          "command": "arbor.openModelDiagram",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "arbor.refreshWorkspace",
+          "when": "view =~ /^arbor\\./",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "arbor.openModelDiagram",
+          "when": "view == arbor.models && viewItem == arbor.model",
+          "group": "inline"
+        },
+        {
+          "command": "arbor.openModelDiagram",
+          "when": "view == arbor.models && viewItem == arbor.model",
+          "group": "navigation"
+        },
+        {
+          "command": "arbor.revealInDiagram",
+          "when": "view == arbor.models && viewItem == arbor.element",
+          "group": "inline"
+        },
+        {
+          "command": "arbor.revealInDiagram",
+          "when": "view == arbor.models && viewItem =~ /^arbor\\.(element|slot)$/",
+          "group": "navigation"
+        }
+      ]
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "*.arbor.view.json",
+        "url": "./schemas/view.schema.json"
+      }
+    ],
+    "configurationDefaults": {
+      "explorer.fileNesting.patterns": {
+        "*.arbor": "${capture}.arbor.view.json"
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "arbor",
+          "title": "Arbor",
+          "icon": "resources/arbor.svg"
+        }
+      ]
+    },
+    "views": {
+      "arbor": [
+        {
+          "id": "arbor.coreProfiles",
+          "name": "Core Profiles",
+          "contextualTitle": "Arbor"
+        },
+        {
+          "id": "arbor.domainProfiles",
+          "name": "Domain Profiles",
+          "contextualTitle": "Arbor"
+        },
+        {
+          "id": "arbor.models",
+          "name": "Models",
+          "contextualTitle": "Arbor"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "arbor.coreProfiles",
+        "contents": "No core profiles in this workspace. A core profile defines kinds without building on another profile, like `profile software { ... }`."
+      },
+      {
+        "view": "arbor.domainProfiles",
+        "contents": "No domain profiles in this workspace. A domain profile is layered on another one: its kinds extend or point at that profile's kinds."
+      },
+      {
+        "view": "arbor.models",
+        "contents": "No models in this workspace. Start one with `model <name> { ... }` in an .arbor file."
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p webview",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@arbor/adapter-flow": "0.1.0",
+    "@arbor/ir": "0.1.0",
+    "@arbor/language": "0.1.0",
+    "@arbor/property-form": "0.1.0",
+    "@fluentui/react-icons": "^2.0.311",
+    "@mantine/core": "^8.3.2",
+    "@mantine/hooks": "^8.3.2",
+    "allotment": "^1.20.4",
+    "elkjs": "^0.11.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "vscode-languageclient": "~10.1.2",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@types/vscode": "~1.95.0",
+    "@webgpu/types": "^0.1.65",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.8.3"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "format": "arbor/view",
+  "version": 1,
+  "model": "shop.arbor",
+  "nodes": {
+    "order": {
+      "x": 0,
+      "y": 120
+    },
+    "order.buyer": {
+      "x": 400,
+      "y": 120
+    },
+    "order.id": {
+      "x": 200,
+      "y": 120
+    },
+    "order.total": {
+      "x": 600,
+      "y": 120
+    },
+    "shop.Checkout": {
+      "x": 800,
+      "y": 120
+    },
+    "shop.Checkout.OrderApi": {
+      "x": 1000,
+      "y": 120
+    },
+    "shop.Checkout.OrderApi.placeOrder": {
+      "x": 0,
+      "y": 240
+    },
+    "shop.Checkout.OrderApi.placeOrder.buyer": {
+      "x": 200,
+      "y": 240
+    },
+    "shop.Checkout.OrderApi.streamStatus": {
+      "x": 400,
+      "y": 240
+    },
+    "shop.Money": {
+      "x": 400,
+      "y": 0
+    },
+    "shop.Payments": {
+      "x": 600,
+      "y": 240
+    },
+    "shop.Payments.charge": {
+      "x": 800,
+      "y": 240
+    },
+    "shop.Text": {
+      "x": 200,
+      "y": 0
+    },
+    "shop.UUID": {
+      "x": 0,
+      "y": 0
+    },
+    "user": {
+      "x": 200,
+      "y": -200
+    },
+    "user.email": {
+      "x": 1000,
+      "y": 0
+    },
+    "user.id": {
+      "x": 800,
+      "y": 0
+    }
+  },
+  "edges": {}
+}

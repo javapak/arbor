@@ -6,7 +6,9 @@
   "main": "out/index.js",
   "types": "out/index.d.ts",
   "exports": {
-    ".": "./out/index.js"
+    ".": "./out/index.js",
+    "./protocol": "./out/lsp/protocol.js",
+    "./server-node": "./out/main-node.js"
   },
   "bin": {
     "arbor": "./out/cli/main.js"
