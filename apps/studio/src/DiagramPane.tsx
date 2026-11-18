@@ -24,8 +24,9 @@ export default function DiagramPane() {
       if (cancelled) return;
       const { layout, edgeLayout, setLayout, setDiagnostics } = useStudio.getState();
       const graph = toFlowGraph(result.ir, { layout, edgeLayout });
-      // Pin auto-placed nodes, so adding an element doesn't reshuffle the others.
-      const placed = graph.nodes.filter(n => !layout[n.id]);
+      // Pin auto-placed nodes, so adding an element doesn't reshuffle the others. Nodes inside a
+      // container are arranged by it and have no place of their own.
+      const placed = graph.nodes.filter(n => !layout[n.id] && !n.parentId);
       if (placed.length) {
         setLayout(l => ({ ...l, ...Object.fromEntries(placed.map(n => [n.id, { ...n.data.position }])) }));
       }
