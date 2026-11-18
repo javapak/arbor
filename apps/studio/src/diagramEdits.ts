@@ -1,5 +1,6 @@
 import type { DiagramEdit } from 'webgpu-flow';
-import { planAddElement, planRemoveElement } from '@arbor/language';
+import { loadWorkspace, planAddElement, planRemoveElement, planSetSlot } from '@arbor/language';
+import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import { sources, useStudio } from './store';
 
 /**
@@ -26,8 +27,10 @@ export function handleEdit(edit: DiagramEdit): void {
       void removeElement(edit);
       break;
     case 'edge-added':
+      void connect(edit.edge.sourceNodeId, edit.edge.targetNodeId);
+      break;
     case 'edge-removed':
-      undo('Edges come from references and containment in the text. Edit the text to change them.');
+      void disconnect(edit.edge);
       break;
     case 'node-changed':
       s.setNotice('Label and colour changes are display-only; the next text change redraws from the profile.');
@@ -56,6 +59,49 @@ async function removeElement(edit: Extract<DiagramEdit, { kind: 'node-removed' }
   if ('error' in plan) return undo(`Couldn't remove ${edit.node.data.label}: ${plan.error}.`);
   s.applyTextEdit(plan);
   s.setActive(plan.uri);
+  s.setNotice(null);
+}
+
+/** A drawn edge sets a reference of its source to its target, asking which if several fit. */
+async function connect(sourceId: string, targetId: string) {
+  const s = useStudio.getState();
+  const index = new IRIndex((await loadWorkspace(sources(s.files))).ir);
+  const source = index.elements.get(sourceId), target = index.elements.get(targetId);
+  if (!source || !target) return undo('Edges connect elements; draw from one element to another.');
+  const fitting = referenceSlotsFor(index, source, target);
+  if (fitting.length === 0) {
+    return undo(`${source.name} has no reference that can point at ${target.name} (a ${target.kind.split('.').pop()}).`);
+  }
+  const open = fitting.filter(f => withTarget(source, f, targetId) !== undefined);
+  if (open.length === 0) return undo(`${source.name} already points at ${target.name}.`);
+  let slot = open[0];
+  if (open.length > 1) {
+    const answer = window.prompt(`Which reference of ${source.name} should point at ${target.name}? (${open.map(f => f.name).join(', ')})`, open[0].name);
+    const chosen = open.find(f => f.name === answer?.trim());
+    if (!chosen) return undo('');
+    slot = chosen;
+  }
+  await setSlot(sourceId, slot.name, withTarget(source, slot, targetId));
+}
+
+/** Deleting a reference edge removes that reference from the text. Containment edges stay. */
+async function disconnect(edge: Extract<DiagramEdit, { kind: 'edge-removed' }>['edge']) {
+  if (edge.data?.relation !== 'reference') {
+    return undo('Containment comes from nesting in the text: move or delete the element to change it.');
+  }
+  const s = useStudio.getState();
+  const index = new IRIndex((await loadWorkspace(sources(s.files))).ir);
+  const source = index.elements.get(edge.sourceNodeId);
+  const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.label);
+  if (!source || slot?.feature !== 'ref') return undo('');
+  await setSlot(source.id, slot.name, withoutTarget(source, slot, edge.targetNodeId));
+}
+
+async function setSlot(id: string, name: string, value: string | string[] | undefined) {
+  const s = useStudio.getState();
+  const plan = await planSetSlot(sources(s.files), id, name, value);
+  if ('error' in plan) return undo(`Couldn't change the text: ${plan.error}.`);
+  s.applyTextEdit(plan);
   s.setNotice(null);
 }
 

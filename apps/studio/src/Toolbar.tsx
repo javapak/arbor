@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActionIcon, Group, Menu, Tooltip } from '@mantine/core';
-import { FlowchartRegular, ZoomFitRegular } from '@fluentui/react-icons';
-import { useDiagram, type LayoutOptions } from 'webgpu-flow';
+import { ConnectorRegular, FlowchartRegular, ZoomFitRegular } from '@fluentui/react-icons';
+import { InteractionMode, useDiagram, type LayoutOptions } from 'webgpu-flow';
 import type { LayoutEntry } from '@arbor/adapter-flow';
 import { useStudio } from './store';
 
@@ -16,7 +16,8 @@ const LAYOUTS: Array<{ label: string; options: Partial<LayoutOptions> }> = [
 
 /** Fit the diagram to the view, and lay it out automatically; a layout is kept in the layout sidecars like a move. */
 export default function Toolbar() {
-  const { fitToContent, applyLayout, serializeDiagram } = useDiagram();
+  const { fitToContent, applyLayout, serializeDiagram, mode, toggleMode, exitDrawMode } = useDiagram();
+  const connecting = mode === InteractionMode.DRAW_EDGE;
   const [running, setRunning] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -46,6 +47,12 @@ export default function Toolbar() {
 
   return (
     <Group gap={4} style={{ position: 'absolute', top: 12, right: 12 }}>
+      <Tooltip label={connecting ? 'Click the source element, then the target (Esc cancels)' : 'Connect: draw a reference from one element to another'}>
+        <ActionIcon variant={connecting ? 'filled' : 'default'} aria-label="Connect" aria-pressed={connecting}
+          onClick={() => (connecting ? exitDrawMode() : toggleMode())}>
+          <ConnectorRegular />
+        </ActionIcon>
+      </Tooltip>
       <Tooltip label="Fit to view">
         <ActionIcon variant="default" aria-label="Fit to view" onClick={() => fitToContent()}>
           <ZoomFitRegular />

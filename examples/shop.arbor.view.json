@@ -39,7 +39,7 @@
     },
     "payment.order": {
       "x": 200,
-      "y": -800,
+      "y": -650,
       "width": 152,
       "height": 150
     },
@@ -58,10 +58,10 @@
       "y": -601
     },
     "shop.Checkout.OrderApi.placeOrder.buyer": {
-      "x": 800,
-      "y": -250,
-      "width": 200,
-      "height": 57
+      "x": 1050,
+      "y": -450,
+      "width": 191,
+      "height": 136
     },
     "shop.Checkout.OrderApi.streamStatus": {
       "x": 397,
@@ -273,8 +273,8 @@
     ],
     "payment.order--type->order": [
       {
-        "x": 166,
-        "y": -533
+        "x": 199,
+        "y": -551
       },
       {
         "x": 356,

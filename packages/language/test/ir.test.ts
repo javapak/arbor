@@ -1,6 +1,6 @@
 import { Validator } from '@cfworker/json-schema';   // interprets schemas; no codegen
 import { describe, expect, it } from 'vitest';
-import { IRIndex } from '@arbor/ir';
+import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import schema from '../../ir/schema/ir.schema.json' with { type: 'json' };
 import { toFlowGraph } from '@arbor/adapter-flow';
 import { EmptyFileSystem, URI } from 'langium';
@@ -80,9 +80,9 @@ describe('IR -> flow graph', () => {
         expect(user.visual.visualContent).toMatchObject({ type: 'svg', colorizable: true, size: { width: 256, height: 256 } });
         expect(user.visual.visualContent!.content).toMatch(/^<svg /);
         // The layout's width is the least a box gets; its properties may widen it. Height: header,
-        // padding and two property lines.
+        // padding, two property lines, and its two columns as member rows.
         expect(user.visual.size.width).toBeGreaterThanOrEqual(200);
-        expect(user.visual.size.height).toBe(28 + 2 * 8 + 2 * 18);
+        expect(user.visual.size.height).toBe(28 + 2 * 8 + 2 * 18 + 6 + 26 + 4 + 26);
         expect(user.data.size).toEqual(user.visual.size);
         expect(g.nodes.find(n => n.id === 'shop.Checkout')!.visual.shape).toBe('package');
         expect(g.nodes.find(n => n.id === 'user.email')!.data.parentId).toBe('user');
@@ -106,6 +106,32 @@ describe('IR -> flow graph', () => {
         const own = g.edges.find(e => e.sourceNodeId === 'm.h' && e.targetNodeId === 'm.h.f')!;
         expect(own.data).toEqual({ label: 'items', relation: 'containment' });
         expect(own.style.sourceMarker).toBe('filled-diamond');
+    });
+
+    it('finds the reference slots an edge drawn between two elements can set, and their new values', async () => {
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: `profile p {
+                kind Base {}
+                kind Box extends Base {}
+                kind Other {}
+                kind Link {
+                    ref one:  Box [0..1]
+                    ref many: Base [0..*]
+                    ref else: Other [0..1]
+                }
+            }` },
+            { uri: 'm.arbor', text: 'model m { Box a {} Box b {} Other o {} Link l { many: [-> a] } }' }
+        ]);
+        expect(r.diagnostics).toEqual([]);
+        const index = new IRIndex(r.ir);
+        const el = (id: string) => index.elements.get(id)!;
+        const slots = referenceSlotsFor(index, el('m.l'), el('m.b'));
+        expect(slots.map(s => s.name)).toEqual(['one', 'many']);     // a Box is a Base; not an Other
+        expect(withTarget(el('m.l'), slots[0], 'm.b')).toBe('m.b');
+        expect(withTarget(el('m.l'), slots[1], 'm.b')).toEqual(['m.a', 'm.b']);
+        expect(withTarget(el('m.l'), slots[1], 'm.a')).toBeUndefined();   // already there
+        expect(withoutTarget(el('m.l'), slots[1], 'm.a')).toBeUndefined(); // nothing left: remove the slot
+        expect(referenceSlotsFor(index, el('m.l'), el('m.o')).map(s => s.name)).toEqual(['else']);
     });
 
     it('draws members in their owner as rows, labelled from their slots, without the edges the label shows', async () => {

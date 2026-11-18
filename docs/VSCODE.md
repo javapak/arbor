@@ -23,6 +23,11 @@ Edits go both ways:
 - Typing in the text redraws the diagram.
 - Dropping a kind from the **Add node** palette onto the canvas adds an element
   to the text; deleting a node removes it and everything nested in it.
+- Drawing an edge sets a reference: click **Connect**, then the source element,
+  then the target (Esc cancels). If several of the source's references can
+  point at the target, VS Code asks which. Selecting a reference edge and
+  pressing Delete removes that reference. Containment edges come from nesting
+  in the text, so they can't be drawn or deleted.
 - Moving a node, resizing it and bending an edge only change the view file.
   When you let go, a moved node's edges, a resized node's dragged edges and a
   dragged bend point snap to the grid; hold **Alt** to place them freely. A container, which you
@@ -36,6 +41,7 @@ palette of every model's diagram.
 
 At the top right of the canvas:
 
+- **Connect** draws a reference (see above).
 - **Fit to view** frames the whole model.
 - **Lay out automatically** arranges the model: layered (left to right or top to
   bottom), tree, organic, force-directed, or packed boxes. Edges are routed

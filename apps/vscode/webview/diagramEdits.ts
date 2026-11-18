@@ -1,4 +1,5 @@
 import type { DiagramEdit } from 'webgpu-flow';
+import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import { useDiagramStore } from './store';
 import { post } from './vscode';
 
@@ -38,8 +39,10 @@ export function handleEdit(edit: DiagramEdit): void {
             post({ type: 'remove-element', id: edit.node.id });
             break;
         case 'edge-added':
+            connect(edit.edge.sourceNodeId, edit.edge.targetNodeId);
+            break;
         case 'edge-removed':
-            undo('Edges come from references and containment. Set references in the properties panel or the text.');
+            disconnect(edit.edge);
             break;
         case 'node-changed':
             s.setNotice('Label and colour changes are display-only; the next change redraws from the profile.');
@@ -52,4 +55,37 @@ function undo(notice: string) {
     const s = useDiagramStore.getState();
     s.setNotice(notice || null);
     s.resync();
+}
+
+/** A drawn edge sets a reference of its source to its target; the host asks which, if several fit. */
+function connect(sourceId: string, targetId: string) {
+    const { ir } = useDiagramStore.getState();
+    if (!ir) return undo('');
+    const index = new IRIndex(ir);
+    const source = index.elements.get(sourceId), target = index.elements.get(targetId);
+    if (!source || !target) return undo('Edges connect elements; draw from one element to another.');
+    const fitting = referenceSlotsFor(index, source, target);
+    if (fitting.length === 0) {
+        return undo(`${source.name} has no reference that can point at ${target.name} (a ${target.kind.split('.').pop()}).`);
+    }
+    const slots = fitting.flatMap(f => {
+        const value = withTarget(source, f, targetId);
+        return value === undefined ? [] : [{ name: f.name, value }];
+    });
+    if (slots.length === 0) return undo(`${source.name} already points at ${target.name}.`);
+    // The new edge is drawn once the text has the reference; until then, the drawn one stays.
+    post({ type: 'connect', id: sourceId, target: targetId, slots });
+}
+
+/** Deleting a reference edge removes that reference from the text. Containment edges stay. */
+function disconnect(edge: Extract<DiagramEdit, { kind: 'edge-removed' }>['edge']) {
+    const { ir } = useDiagramStore.getState();
+    if (!ir || edge.data?.relation !== 'reference') {
+        return undo('Containment comes from nesting in the text: move or delete the element to change it.');
+    }
+    const index = new IRIndex(ir);
+    const source = index.elements.get(edge.sourceNodeId);
+    const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.label);
+    if (!source || slot?.feature !== 'ref') return undo('');
+    post({ type: 'set-slot', id: source.id, name: slot.name, value: withoutTarget(source, slot, edge.targetNodeId) });
 }

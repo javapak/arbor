@@ -162,6 +162,12 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
                 if (edit) await this.apply(edit, post);
                 break;
             }
+            case 'connect': {
+                const slot = m.slots.length === 1 ? m.slots[0] : await pickSlot(m.slots, m.id, m.target);
+                if (!slot) return post({ type: 'notice', text: null, resync: true });   // cancelled
+                await this.handle({ type: 'set-slot', id: m.id, name: slot.name, value: slot.value }, ctx);
+                break;
+            }
             case 'reveal': {
                 const at = await this.plan<{ uri: string; offset: number; length: number }>(DiagramRequests.locate, { uri, id: m.id }, post);
                 if (!at) return;
@@ -199,4 +205,14 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
             post({ type: 'notice', text: `Couldn't edit ${target.fileName}; it may be read-only.`, resync: true });
         }
     }
+}
+
+/** Asks which of several reference slots a drawn edge sets. */
+async function pickSlot<T extends { name: string }>(slots: T[], id: string, target: string): Promise<T | undefined> {
+    const name = (s: string) => s.split('.').pop();
+    const pick = await vscode.window.showQuickPick(slots.map(s => ({ label: s.name, slot: s })), {
+        title: `Connect ${name(id)} to ${name(target)}`,
+        placeHolder: 'Which reference should point at it?',
+    });
+    return pick?.slot;
 }

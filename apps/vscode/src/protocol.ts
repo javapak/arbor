@@ -40,7 +40,12 @@ export type WebviewMessage =
     /** Show the element in the text editor. */
     | { type: 'reveal'; id: string }
     /** The single selected element, or `null`; shown in the properties view. */
-    | { type: 'selection'; id: string | null };
+    | { type: 'selection'; id: string | null }
+    /**
+     * An edge drawn from element `id` to `target`: set one of these reference slots (the webview
+     * worked out which fit, and each one's new value); the host asks which if there are several.
+     */
+    | { type: 'connect'; id: string; target: string; slots: Array<{ name: string; value: string | string[] }> };
 
 /**
  * Messages between the host and the properties view, a side bar view that
