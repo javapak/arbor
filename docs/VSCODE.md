@@ -77,8 +77,11 @@ composition edge (◆), as `Customer` is to its columns. A kind whose visual set
   contents have no positions in the view file.
 
 **Edges.** References are arrows, labelled with the reference's name. An edge
-meets a row at its left or right end, whichever faces the other node. Edges
-leaving a container are drawn over it.
+meets a row at its left or right end, whichever faces the other node. Where
+several edges would meet one side of a node at the same spot, their ends are
+spread along it, in the order the edges arrive, so their markers don't overlap
+(on a crowded row end, the markers also shrink to fit). Edges leaving a
+container are drawn over it.
 
 **Moving.** Dragging a top-level node moves it; dragging a container moves its
 contents with it. An element inside a container goes back where it was when you
