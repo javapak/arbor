@@ -28,8 +28,10 @@ export default function Toolbar() {
             await applyLayout(options, { animate: true });
             const { nodes, edges } = serializeDiagram();
             const s = useDiagramStore.getState();
-            // Positions only: sizes stay as the user or the profile set them.
-            const moved: Record<string, LayoutEntry> = Object.fromEntries(nodes.map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
+            // Positions only (sizes stay as the user or the profile set them), and only of top-level
+            // nodes: containers arrange what's inside them.
+            const moved: Record<string, LayoutEntry> = Object.fromEntries(
+                nodes.filter(n => !n.parentId).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
             const routed = Object.fromEntries(edges.map(e => [e.id, e.userVertices.length ? e.userVertices : null]));
             s.setLayout(l => ({ ...l, ...moved }));
             s.setEdgeLayout(l => {

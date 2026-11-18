@@ -6,6 +6,7 @@ import { useStudio } from './store';
 import { handleEdit } from './diagramEdits';
 import Editor from './Editor';
 import DiagramPane from './DiagramPane';
+import Toolbar from './Toolbar';
 
 export default function Studio() {
   const { files, active, diagnostics, notice, setFile, setActive, setNotice, reset } = useStudio();
@@ -73,6 +74,7 @@ export default function Studio() {
             <Allotment.Pane minSize={320}>
               <div style={{ position: 'relative', height: '100%' }}>
                 <DiagramPane />
+                <Toolbar />
                 {notice && (
                   <Group gap={6} wrap="nowrap" style={{
                     position: 'absolute', left: 12, right: 12, bottom: 12, padding: '6px 10px', borderRadius: 8,
