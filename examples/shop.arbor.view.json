@@ -4,8 +4,8 @@
   "model": "shop.arbor",
   "nodes": {
     "order": {
-      "x": 356,
-      "y": -301,
+      "x": 450,
+      "y": -300,
       "width": 103,
       "height": 114
     },
@@ -38,8 +38,8 @@
       "height": 91
     },
     "payment.order": {
-      "x": 166,
-      "y": -601,
+      "x": 200,
+      "y": -800,
       "width": 152,
       "height": 150
     },
@@ -58,10 +58,10 @@
       "y": -601
     },
     "shop.Checkout.OrderApi.placeOrder.buyer": {
-      "x": 787,
-      "y": -296,
-      "width": 186,
-      "height": 88
+      "x": 800,
+      "y": -250,
+      "width": 200,
+      "height": 57
     },
     "shop.Checkout.OrderApi.streamStatus": {
       "x": 397,
@@ -158,8 +158,8 @@
       "y": 360
     },
     "shop.internal": {
-      "x": -200,
-      "y": -900,
+      "x": 50,
+      "y": -1100,
       "width": 239,
       "height": 310
     },

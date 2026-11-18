@@ -24,6 +24,8 @@ profile software version "0.1.0" {
         ref  type:     Type [1]
         prop optional: bool = false
         prop many:     bool = false
+        // Drawn in its owner's box as `name : Type`, like a UML attribute.
+        visual { member: true  label: "{name} : {type}" }
     }
 
     kind Component extends NamedElement {
