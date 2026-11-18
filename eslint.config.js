@@ -5,7 +5,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-    { ignores: ['**/out/**', '**/node_modules/**', '**/generated/**', 'webgpu-flow/**', 'apps/*/dist/**'] },
+    { ignores: ['**/out/**', '**/node_modules/**', '**/generated/**', 'webgpu-flow/**', 'apps/*/dist/**', 'apps/vscode/media/**'] },
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {

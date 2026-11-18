@@ -50,6 +50,28 @@ export class IRIndex {
         return merged;
     }
 
+    /**
+     * The other profiles a profile builds on: those whose kinds its kinds
+     * extend, contain or reference, or whose enums its properties use. A
+     * profile with none stands alone (a core profile); one with some is
+     * layered on them (a domain profile).
+     */
+    dependsOn(profileName: string): string[] {
+        const profile = this.doc.profiles.find(p => p.name === profileName);
+        if (!profile) return [];
+        const owner = (id: string) => id.slice(0, id.indexOf('.'));
+        const used = new Set<string>();
+        for (const k of profile.kinds) {
+            for (const id of k.extends) used.add(owner(id));
+            for (const f of k.features) {
+                if (f.feature !== 'property') used.add(owner(f.target));
+                else if (typeof f.type === 'object') used.add(owner(f.type.enum));
+            }
+        }
+        used.delete(profileName);
+        return [...used].sort();
+    }
+
     /** Property value with the profile default applied. */
     get(element: IRElement, name: string): unknown {
         if (name in element.properties) return element.properties[name];

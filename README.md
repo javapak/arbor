@@ -33,7 +33,8 @@ runtime with no TypeScript compiler API and no `eval`.
 |---|---|---|
 | `@arbor/ir` | nothing | IR types, JSON Schema, `IRIndex` read helpers (inheritance, defaults, visuals), and the renderer-neutral visual vocabulary (`VISUAL_KEYS`) |
 | `@arbor/adapter-flow` | `@arbor/ir` | IR → `{ nodes, edges }` for the renderer, with layout from a sidecar |
-| `@arbor/language` | Langium, the two above | grammar, validator, AST → IR, CLI, LSP entry points (Node + web worker) |
+| `@arbor/language` | Langium, the two above | grammar, validator, AST → IR, CLI, LSP entry points (Node + web worker), diagram requests (`src/lsp/`) |
+| `@arbor/property-form` | `@arbor/ir`, React, Mantine | a form for one element's slots, drawn from the JSON Schema `slotSchema` derives from its kind |
 
 ## Getting started
 
@@ -120,6 +121,51 @@ The editor is CodeMirror with a highlighting-only grammar. Langium's language
 server (`packages/language/out/main-browser.js` in a web worker) can replace the
 direct `loadWorkspace` calls once completion and go-to-definition are wanted.
 
+## VS Code extension
+
+`apps/vscode` is the editor for real files: VS Code's own text editor talks to
+the Langium language server (`main-node.ts`, run under
+`--disallow-code-generation-from-strings`), and a custom editor shows the same
+document as a diagram with a property form.
+
+```bash
+npm run extension   # builds the packages, then bundles the extension into apps/vscode/dist and media/
+```
+
+Then press F5 with the **Arbor extension** launch configuration, which opens
+`examples/` in an Extension Development Host. Open an `.arbor` file and use
+**Arbor: Open Diagram to the Side** (editor title bar) or **Open With… → Arbor Diagram**.
+Like the studio, it needs the webgpu-flow clone and WebGPU (VS Code's webviews have it).
+
+- **One document, two editors.** The diagram is a `CustomTextEditorProvider`, so
+  VS Code keeps the `TextDocument`: undo, dirty state and save are shared with
+  the text editor, and both can be open side by side.
+- **The server does the parsing.** The webview never sees text. It asks the
+  extension, which asks the server through custom requests (`arbor/model`,
+  `arbor/planAddElement`, `arbor/planRemoveElement`, `arbor/planSetSlot`,
+  `arbor/locateElement`; see `packages/language/src/lsp/protocol.ts`) and
+  applies the returned edits as `WorkspaceEdit`s. The server's workspace holds
+  every profile, and `arbor/documentsChanged` redraws open diagrams when one changes.
+- **Properties panel.** Selecting one element shows a form generated from its
+  kind (`slotSchema` in `@arbor/ir`: inherited properties, enums, references
+  limited to elements of the target kind). Each change is one slot edit in
+  the text. Text and number fields apply on blur or Enter; × removes the slot so
+  the profile default applies again.
+- **Workspace trees.** The Arbor activity bar container has three views fed by
+  `arbor/workspace` (every profile and model the server knows, with where each
+  item is named): **Core Profiles** (profiles that stand alone, like `software`),
+  **Domain Profiles** (profiles layered on others: their kinds extend, contain or
+  reference another profile's kinds, or use its enums; see `IRIndex.dependsOn`),
+  and **Models** (elements nested by containment, with their written slots).
+  Clicking an item shows it in the text; elements also have **Reveal in Diagram**.
+  The trees refresh after every rebuild, as the diagrams do.
+- **Layout lives in a view file**, `<name>.arbor.view.json` next to the model,
+  never in browser storage. Its name is the link to the model, and the extension
+  nests it under the model in the explorer (when file nesting is on). Coordinates
+  are whole pixels and keys are sorted, so it diffs cleanly; changes made on disk
+  (a checkout, a hand edit) redraw the diagram. Delete it to start the layout over.
+  `schemas/view.schema.json` validates it.
+
 ## Decisions so far
 
 - **Text is the source of truth**, the IR is derived and read-only. Diagram
@@ -139,5 +185,6 @@ direct `loadWorkspace` calls once completion and go-to-definition are wanted.
 - [ ] Diagram → text edits: adding and removing elements done (studio);
       edges → reference slots and nested drops → containment still to do.
 - [ ] First real emitter targeting core kinds (JSON Schema from `DataType`/`Field`).
-- [ ] Profile → JSON Schema for dynamic forms.
+- [x] Profile → JSON Schema for dynamic forms (`slotSchema`, used by `@arbor/property-form`).
 - [x] Editor next to the renderer: `apps/studio` (CodeMirror; language server worker later).
+- [x] VS Code extension: language server, diagram custom editor, property form, view file (`apps/vscode`).

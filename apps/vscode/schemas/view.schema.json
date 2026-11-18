@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "arbor view",
+  "description": "Diagram layout for the .arbor file of the same name. Text never stores coordinates; this file does. Safe to delete: elements are placed again.",
+  "type": "object",
+  "required": ["format", "version"],
+  "properties": {
+    "format": { "const": "arbor/view" },
+    "version": { "const": 1 },
+    "model": { "type": "string", "description": "The .arbor file this view belongs to, relative to this file." },
+    "nodes": {
+      "type": "object",
+      "description": "Element ID -> position and size.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["x", "y"],
+        "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number" }, "height": { "type": "number" } },
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "object",
+      "description": "Edge ID -> user-placed bend points.",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "object", "required": ["x", "y"], "properties": { "x": { "type": "number" }, "y": { "type": "number" } } }
+      }
+    }
+  },
+  "additionalProperties": false
+}

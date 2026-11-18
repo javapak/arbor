@@ -1,0 +1,8 @@
+**
+!dist/**
+!media/**
+!syntaxes/**
+!schemas/**
+!resources/**
+!language-configuration.json
+!package.json
