@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DiagnosticCode as C } from '../src/language/arbor-validator.js';
 import { loadWorkspace } from '../src/cli/load.js';
@@ -93,6 +95,32 @@ describe('profile validation', () => {
         expect(bad.map(d => d.message.split(':')[0])).toEqual([
             "Visual 'shape'", "Visual 'color'", "Visual 'tint'", "Visual 'svg'"
         ]);
+    });
+
+    it('checks edge styles on features against the edge vocabulary', async () => {
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: `profile p { kind A {
+            ref a: A [0..1] { targetMarker: "triangel"  colour: "#fff"  line: "dashed" }
+        } }` }]);
+        expect(r.diagnostics.find(x => x.code === C.BadVisualValue)?.fix).toBe('triangle');
+        expect(r.diagnostics.find(x => x.code === C.UnknownVisualKey)?.fix).toBe('color');
+        expect(r.diagnostics).toHaveLength(2);
+    });
+
+    it('an edge kind\'s ends must be references of the kind, or its owner', async () => {
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: `profile p {
+            kind Link { ref general: Link [1]  visual { source: "owner"  target: "genral" } }
+            kind Half { ref to: Half [1]  visual { target: "to" } }
+        }` }]);
+        const bad = r.diagnostics.filter(x => x.code === C.BadVisualValue);
+        expect(bad[0].fix).toBe('general');
+        expect(bad[1].message).toMatch(/both 'source' and 'target'/);
+        expect(bad).toHaveLength(2);
+    });
+
+    it('the UML sample is clean', async () => {
+        const dir = fileURLToPath(new URL('../../../samples/uml/', import.meta.url));
+        const r = await loadWorkspace(['uml.arbor', 'library.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
+        expect(r.diagnostics).toEqual([]);
     });
 
     it('bad multiplicity', async () => {

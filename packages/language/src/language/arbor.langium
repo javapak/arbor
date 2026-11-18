@@ -32,16 +32,44 @@ Kind:
 Feature: PropFeature | ContainsFeature | RefFeature;
 
 // prop tableName: string = "users"
+// readonly prop qualifiedName: string [0..1]
 PropFeature:
-    'prop' name=FeatureName ':' type=TypeRef multiplicity=Multiplicity? ('=' default=Literal)?;
+    modifiers+=Modifier* 'prop' name=FeatureName ':' type=TypeRef multiplicity=Multiplicity? ('=' default=Literal)?
+        clauses+=FeatureClause*;
 
 // contains fields: Field [0..*]
+// ordered contains attributes: Property [0..*] subsets ownedMembers
 ContainsFeature:
-    'contains' name=FeatureName ':' target=[Kind:QualifiedName] multiplicity=Multiplicity?;
+    modifiers+=Modifier* 'contains' name=FeatureName ':' target=[Kind:QualifiedName] multiplicity=Multiplicity?
+        clauses+=FeatureClause* edge=EdgeVisual?;
 
 // ref returns: DataType [1]
+// ref general: Classifier [1] { targetMarker: "inheritance" }
+// derived ref owningClass: Classifier [0..1] opposite attributes
 RefFeature:
-    'ref' name=FeatureName ':' target=[Kind:QualifiedName] multiplicity=Multiplicity?;
+    modifiers+=Modifier* 'ref' name=FeatureName ':' target=[Kind:QualifiedName] multiplicity=Multiplicity?
+        clauses+=FeatureClause* edge=EdgeVisual?;
+
+// MOF/UML feature modifiers: values kept in order, without duplicates, set
+// only when the element is written, or computed (opposites, unions) rather than written.
+Modifier returns string:
+    'ordered' | 'unique' | 'readonly' | 'derived';
+
+// Relations to other features, named rather than linked (they're checked by the validator):
+// the target kind's feature pointing back, the features of this kind whose values
+// this feature's include, and the inherited features it replaces.
+FeatureClause:
+    OppositeClause | SubsetsClause | RedefinesClause;
+OppositeClause:
+    'opposite' feature=FeatureName;
+SubsetsClause:
+    'subsets' features+=FeatureName (',' features+=FeatureName)*;
+RedefinesClause:
+    'redefines' features+=FeatureName (',' features+=FeatureName)*;
+
+// How a feature's edges are drawn: the same entries as a visual block, with edge keys.
+EdgeVisual:
+    '{' (entries+=VisualEntry)* '}';
 
 TypeRef: PrimitiveTypeRef | EnumTypeRef;
 PrimitiveTypeRef: primitive=('string' | 'int' | 'float' | 'bool');
@@ -99,7 +127,8 @@ QualifiedName returns string:
 FeatureName returns string:
     ID | 'version' | 'kind' | 'model' | 'profile' | 'visual' | 'enum'
        | 'abstract' | 'extends' | 'prop' | 'contains' | 'ref'
-       | 'string' | 'int' | 'float' | 'bool';
+       | 'string' | 'int' | 'float' | 'bool'
+       | 'ordered' | 'unique' | 'readonly' | 'derived' | 'opposite' | 'subsets' | 'redefines';
 
 // ======================================================================
 // Terminals

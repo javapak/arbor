@@ -28,6 +28,9 @@ Edits go both ways:
   point at the target, VS Code asks which. Selecting a reference edge and
   pressing Delete removes that reference. Containment edges come from nesting
   in the text, so they can't be drawn or deleted.
+- Some kinds are drawn as edges themselves, such as a UML generalization (see
+  [edge kinds](LANGUAGE.md#edge-styles)). Selecting one shows it in the
+  Properties view, and Delete removes the element.
 - Moving a node, resizing it and bending an edge only change the view file.
   When you let go, a moved node's edges, a resized node's dragged edges and a
   dragged bend point snap to the grid; hold **Alt** to place them freely. A container, which you

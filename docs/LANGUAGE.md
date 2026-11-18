@@ -33,6 +33,7 @@ profile persistence version "0.1.0" {
 - Multiplicity: `[1]`, `[0..1]`, `[1..*]`, `[*]`. Defaults: `prop`/`ref` are `[0..1]`, `contains` is `[0..*]`.
 - A property with a default is never required.
 - `extends` takes one or more kinds; features and visuals inherit, and the nearest definition wins.
+- Features can carry MOF/UML modifiers before them, and relations to other features after the multiplicity (see [Feature modifiers](#feature-modifiers)).
 - Names from another profile can be qualified: `extends software.DataType`, `ref owner: org.Team`. A profile's own names always win inside it, but a bare name from elsewhere breaks as soon as a second profile defines the same name, so **always qualify names from other profiles**.
 - Visual keys:
   - `shape`: `rectangle`, `roundedRectangle`, `circle`, `oval`, `diamond`, `hexagon`, `package`, `actor`, `initialNode`, `finalNode`, `none`. Unknown shapes draw as `rectangle`.
@@ -42,6 +43,76 @@ profile persistence version "0.1.0" {
   - `label`: a template with `{name}`, `{kind}`, or any slot: a property's value, or a reference's target names (`"{name} : {type}"`). A reference the label shows isn't also drawn as an edge.
   - `container: true`: the diagram draws the elements this kind contains inside it, as rows (or nested boxes), instead of as composition edges. See [VSCODE.md](VSCODE.md#how-elements-are-drawn).
   - `member: true`: elements of this kind are drawn inside whatever contains them, as rows, like a UML class's attributes (`software.Field`, and so `persistence.Column`).
+  - `source` and `target`: draw elements of this kind as **edges**, not nodes, between the elements two of its references name, or its `"owner"` (the element containing it). An edge kind can also set `line`, `sourceMarker`, `targetMarker`, `sourceLabel` and `targetLabel` (below), and its `label` is drawn at the middle (default `{name}`). Until both ends are set, the element is drawn as a node, so you can still see it and connect it.
+
+### Feature modifiers
+
+The parts of a MOF/UML property that a profile can state, before the feature (modifiers) and after its multiplicity (relations):
+
+```
+abstract kind Classifier extends NamedElement {
+    derived contains ownedMembers: NamedElement [0..*]                      // a derived union
+    ordered contains attributes:   Property [0..*] subsets ownedMembers
+    ordered contains operations:   Operation [0..*] subsets ownedMembers
+    ref general:                   Classifier [0..*]
+    derived ref specifics:         Classifier [0..*] opposite general       // whoever names this one as general
+    unique prop keywords:          string [0..*]
+    readonly prop qualifiedName:   string [0..1]
+}
+kind Property extends NamedElement {
+    derived ref classifier: Classifier [0..1] opposite attributes            // the classifier it's nested in
+    ref type: Classifier [0..1]
+}
+kind DataProperty extends Property {
+    ref dataType: DataType [1] redefines type                                // DataType extends Classifier
+}
+```
+
+| | Meaning |
+|---|---|
+| `ordered` | The order values are written in matters (emitters keep it). |
+| `unique` | A value may appear only once (ARB111). References and containments never repeat anyway. |
+| `readonly` | Set in the text, not changed by editors: forms show it read-only, and the diagram's Connect tool leaves it out. |
+| `derived` | Worked out, never written (ARB109). A derived reference with an `opposite` holds the elements that point at it through that reference, or the element containing it through that containment. One that other references `subsets` holds the union of their values. Anything else derived is left for tools to compute. Derived references aren't drawn as edges unless the feature says `{ hidden: false }`, since they repeat what other edges show. A derived containment holds no children directly: a nested element goes into the containments that subset it. |
+| `opposite f` | `f` is the target kind's feature pointing back: a reference (which names this one back, if it names any), or a containment (this is then the owner, `[0..1]` or `[1]`). When neither end is derived, both are written, and a model whose ends disagree gets a warning (ARB112). |
+| `subsets f, g` | This feature's values are also `f`'s and `g`'s (same kind, same sort of feature, a fitting type, no more values allowed). A nested element fitting a containment and one it subsets goes into the more specific one. |
+| `redefines f, g` | Replaces inherited features `f` and `g` (fitting type): elements of this kind no longer have them. Redefining a feature of the same name needs no clause. |
+
+These words are keywords, so they can't be element names or enum literals, but they can still be feature and slot names (`unique: true`).
+
+### Edge styles
+
+A `ref` or `contains` feature can say how its edges are drawn, in braces after it:
+
+```
+ref    general:  Classifier [1]   { targetMarker: "triangle" }
+ref    uses:     Component  [0..*] { line: "dashed"  targetMarker: "arrow"  label: "«use»" }
+ref    owner:    Team       [0..1] { targetLabel: "{name} {multiplicity}" }
+contains parts:  Part       [0..*] { sourceMarker: "diamond" }
+ref    internal: Thing      [0..1] { hidden: true }
+```
+
+| Key | Values |
+|---|---|
+| `line` | `solid`, `dashed`, `dotted` |
+| `sourceMarker`, `targetMarker` | `none`, `arrow` (open, UML navigable), `filledArrow`, `triangle` (hollow, UML generalization), `diamond`, `filledDiamond`, `circle`, `dot`, `bar`, `cross`, `square`, `crowFoot` |
+| `color` | hex |
+| `label` | text at the middle: a template, `""` for none (default `{name}`) |
+| `sourceLabel`, `targetLabel` | text at the ends |
+| `hidden` | `true`: no edges for this feature |
+
+In a feature's templates, `{name}` is the feature's name and `{multiplicity}` its multiplicity (`0..*`). In an edge kind's templates, `{…}` are the element's slots, as in `label`. The source of a feature's edge is the element that has the feature. References default to an open arrow at the target, and containment to a filled diamond at the owner.
+
+A UML-style generalization, owned by the specific class and drawn as an edge to the general one:
+
+```
+kind Generalization {
+    ref general: Classifier [1]
+    visual { source: "owner"  target: "general"  targetMarker: "triangle"  label: "" }
+}
+```
+
+[samples/uml](https://github.com/javapak/arbor/tree/main/samples/uml) has a small UML class-diagram profile (classes, interfaces, generalizations, realizations, dependencies, associations, compositions) and a model in it. It has its own folder because its kind names (`Package`, `Interface`, `Operation`) would be ambiguous next to `software`'s.
 
 ## Models
 
@@ -88,6 +159,9 @@ Every element has the same shape:
 | ARB006 | unknown visual key (warning) |
 | ARB007 | simple name defined by several profiles (or models); write the qualified name listed in the message |
 | ARB008 | visual value doesn't fit its key, e.g. unknown shape or non-hex color (warning; `fix` = closest shape) |
+| ARB009 | bad `opposite`: unknown feature, not a reference or containment, doesn't point back, or names another opposite |
+| ARB010 | bad `subsets`: unknown feature, different sort or type, or allows more values than the feature it subsets |
+| ARB011 | bad `redefines`: no inherited feature of that name, or a different sort or type |
 | ARB101 | abstract kind instantiated |
 | ARB102 | unknown slot (`fix` = closest feature) |
 | ARB103 | value has the wrong type |
@@ -96,4 +170,7 @@ Every element has the same shape:
 | ARB106 | nested element fits no containment, or several |
 | ARB107 | too many values / children |
 | ARB108 | slot set twice |
+| ARB109 | a derived feature is written |
 | ARB110 | duplicate element ID |
+| ARB111 | a value repeated in a `unique` slot |
+| ARB112 | written opposite references disagree: a target doesn't point back (warning; `data` names the element and slot) |

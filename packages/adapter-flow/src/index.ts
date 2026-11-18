@@ -6,7 +6,11 @@
  * drawn nested when the owner's kind is a `container` or the element's kind a
  * `member` (the child names its owner as `parentId`, and the renderer arranges
  * it inside: as a row, an icon and a label, unless it holds nested elements
- * itself), and as composition edges otherwise. Properties written in the text are listed under the node's
+ * itself), and as composition edges otherwise. A `ref` or `contains` feature
+ * may style its edges (`{ targetMarker: "triangle" line: "dashed" }`), and a
+ * kind with `source` and `target` visuals is drawn as an edge itself, between
+ * the elements those references (or its owner) name, like a UML generalization:
+ * it falls back to a node until both ends are set. Properties written in the text are listed under the node's
  * header, one `name = value` line each, like a UML class's attributes (rows
  * leave them out). The profile's
  * `visual` block becomes node visuals: a built-in SDF `shape`, or an `svg` /
@@ -19,7 +23,10 @@
  * and `Shape` / `MarkerType` mirror `SHAPE_TYPES` and `MarkerType` in its
  * renderers. Keep them in step.
  */
-import { IRIndex, VISUAL_SHAPES, type IRDocument, type IRElement, type IRScalar, type VisualShape } from '@arbor/ir';
+import {
+    IRIndex, OWNER_END, VISUAL_SHAPES,
+    type EdgeMarker, type IRDocument, type IRElement, type IRFeature, type IRMultiplicity, type IRScalar, type IRVisual, type VisualShape
+} from '@arbor/ir';
 
 /** Shape names the renderer draws (keys of its `SHAPE_TYPES`). */
 export type Shape =
@@ -38,6 +45,15 @@ export type MarkerType =
     | 'crow-foot' | 'crow-foot-optional' | 'crow-foot-mandatory' | 'one' | 'one-optional' | 'many-optional'
     | 'constraint' | 'inheritance' | 'realization'
     | 'double-arrow' | 'bar' | 'dot' | 'square';
+
+/** IR edge marker -> renderer marker. Typed over every IR marker, so a new one fails to compile until mapped. */
+export const MARKERS: Record<EdgeMarker, MarkerType> = {
+    none: 'none', arrow: 'open-arrow', filledArrow: 'filled-arrow', triangle: 'inheritance',
+    diamond: 'diamond', filledDiamond: 'filled-diamond', circle: 'circle', dot: 'dot', bar: 'bar',
+    cross: 'cross', square: 'square', crowFoot: 'crow-foot'
+};
+/** Dash and gap lengths for the IR's `line` styles. */
+const DASHES: Record<string, number[] | undefined> = { solid: undefined, dashed: [8, 6], dotted: [2, 4] };
 
 export interface LayoutEntry { x: number; y: number; width?: number; height?: number }
 /** Sidecar file owned by the renderer: element ID -> position/size. */
@@ -95,12 +111,19 @@ export interface FlowEdge {
     style: {
         color: [number, number, number, number];   // RGBA 0..1
         thickness: number;
+        dashPattern?: number[];
         sourceMarker?: MarkerType;
         targetMarker?: MarkerType;
     };
     data: {
-        label: string;          // feature name
-        relation: 'reference' | 'containment';
+        label: string;          // the feature's name, unless its visuals say otherwise
+        /** Text at the ends, e.g. a role name and multiplicity. */
+        sourceLabel?: string;
+        targetLabel?: string;
+        /** 'element': the edge is an element of an edge kind, whose ID it has. */
+        relation: 'reference' | 'containment' | 'element';
+        /** The reference or containment feature it draws (not for 'element'). */
+        feature?: string;
     };
 }
 
@@ -147,20 +170,26 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
     const contentSize = opts.contentSize ?? 256;
     const nodes: FlowNode[] = [];
     const edges: FlowEdge[] = [];
-    const edge = (id: string, source: string, target: string, label: string, relation: FlowEdge['data']['relation']) =>
-        edges.push({
-            id, sourceNodeId: source, targetNodeId: target,
-            userVertices: edgeLayout[id] ?? [],
-            style: { ...(relation === 'reference' ? REFERENCE_STYLE : CONTAINMENT_STYLE) },
-            data: { label, relation }
-        });
+    const edge = (id: string, source: string, target: string, relation: FlowEdge['data']['relation'],
+        style: FlowEdge['style'], data: Omit<FlowEdge['data'], 'relation'>) =>
+        edges.push({ id, sourceNodeId: source, targetNodeId: target, userVertices: edgeLayout[id] ?? [], style, data: { ...data, relation } });
 
+    const asEdges = edgeElements(doc, index);
+    const drawn = (id: string) => !asEdges.edges.has(id) && !asEdges.hidden.has(id);
     const nestedIn = containerOf(index);
     const compartments = new Map(doc.models.flatMap(m => m.elements).map(el => [el.id, propertyLines(el, index)]));
-    const boxes = placeElements(doc, layout, index, defaultSize, nestedIn, compartments);
+    const boxes = placeElements(doc, layout, index, defaultSize, nestedIn, compartments, drawn);
     for (const model of doc.models) {
         for (const el of model.elements) {
             const v = index.visual(el.kind);
+            const ends = asEdges.edges.get(el.id);
+            if (ends) {
+                edge(el.id, ends.source, ends.target, 'element', edgeStyle(v, REFERENCE_STYLE), {
+                    label: typeof v.label === 'string' ? labelFor(el, v.label, index) : el.name,
+                    ...endLabels(v, t => labelFor(el, t, index))
+                });
+            }
+            if (!drawn(el.id)) continue;
             const kind = index.kinds.get(el.kind);
             const { x, y, ...size } = boxes.get(el.id)!;
             const pos = { x, y };
@@ -189,13 +218,26 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
             });
 
             const shown = labelSlots(v.label);
+            const features = new Map(index.features(el.kind).map(f => [f.name, f]));
             for (const [feature, targets] of Object.entries(el.references)) {
                 if (shown.has(feature)) continue;   // written in the label, e.g. `id : UUID`
-                for (const t of targets) edge(`${el.id}--${feature}->${t}`, el.id, t, feature, 'reference');
+                const f = features.get(feature);
+                // Derived references repeat what other edges show (an opposite, a union): drawn only if asked for.
+                const hidden = edgeVisual(f)?.hidden;
+                if (hidden === true || (f?.derived && hidden !== false)) continue;
+                for (const t of targets) {
+                    if (!drawn(t)) continue;   // an edge element: no node to point at
+                    edge(`${el.id}--${feature}->${t}`, el.id, t, 'reference', edgeStyle(edgeVisual(f), REFERENCE_STYLE), featureLabels(feature, f));
+                }
             }
             if (mode === 'edges' && el.parent && !owner) {
                 const feature = el.containedIn ?? 'contains';
-                edge(`${el.parent}--${feature}->${el.id}`, el.parent, el.id, feature, 'containment');
+                const parent = index.elements.get(el.parent);
+                const contains = parent && index.features(parent.kind).find(c => c.name === feature);
+                if (edgeVisual(contains)?.hidden !== true) {
+                    edge(`${el.parent}--${feature}->${el.id}`, el.parent, el.id, 'containment',
+                        edgeStyle(edgeVisual(contains), CONTAINMENT_STYLE), featureLabels(feature, contains));
+                }
             }
         }
     }
@@ -210,6 +252,89 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
         };
     }));
     return { format: 'webgpu-flow/diagram', version: 1, nodes, edges, ...(palette ? { palette } : {}) };
+}
+
+/**
+ * Elements drawn as edges: those of a kind with `source` and `target` visuals,
+ * with both ends set to elements drawn as nodes. What they contain isn't drawn.
+ */
+function edgeElements(doc: IRDocument, index: IRIndex): { edges: Map<string, { source: string; target: string }>; hidden: Set<string> } {
+    const elements = doc.models.flatMap(m => m.elements);
+    const isEdgeKind = (el: IRElement) => {
+        const v = index.visual(el.kind);
+        return typeof v.source === 'string' && typeof v.target === 'string';
+    };
+    const candidates = new Set(elements.filter(isEdgeKind).map(el => el.id));
+    const end = (el: IRElement, name: IRScalar | undefined) =>
+        name === OWNER_END ? el.parent ?? undefined : el.references[String(name)]?.[0];
+    const edges = new Map<string, { source: string; target: string }>();
+    for (const el of elements) {
+        if (!candidates.has(el.id)) continue;
+        const v = index.visual(el.kind);
+        const source = end(el, v.source), target = end(el, v.target);
+        if (source && target && !candidates.has(source) && !candidates.has(target)) edges.set(el.id, { source, target });
+    }
+    const hidden = new Set<string>();
+    const hide = (id: string) => {
+        for (const c of index.elements.get(id)?.children ?? []) { hidden.add(c); hide(c); }
+    };
+    edges.forEach((_, id) => hide(id));
+    for (const [id, { source, target }] of edges) if (hidden.has(source) || hidden.has(target)) edges.delete(id);
+    return { edges, hidden };
+}
+
+/** An edge's style: the defaults, with the visuals' line, markers and color. */
+function edgeStyle(v: IRVisual | undefined, base: FlowEdge['style']): FlowEdge['style'] {
+    const style = { ...base };
+    if (!v) return style;
+    const marker = (m: IRScalar) => (typeof m === 'string' && Object.hasOwn(MARKERS, m) ? MARKERS[m as EdgeMarker] : 'none');
+    if (v.sourceMarker !== undefined) style.sourceMarker = marker(v.sourceMarker);
+    if (v.targetMarker !== undefined) style.targetMarker = marker(v.targetMarker);
+    const dashes = typeof v.line === 'string' ? DASHES[v.line] : undefined;
+    if (dashes) style.dashPattern = dashes;
+    const color = typeof v.color === 'string' ? rgba(v.color) : undefined;
+    if (color) style.color = color;
+    return style;
+}
+
+/** `sourceLabel` and `targetLabel`, filled in by `fill`, when set and not empty. */
+function endLabels(v: IRVisual | undefined, fill: (template: string) => string): Pick<FlowEdge['data'], 'sourceLabel' | 'targetLabel'> {
+    const out: Pick<FlowEdge['data'], 'sourceLabel' | 'targetLabel'> = {};
+    const source = typeof v?.sourceLabel === 'string' ? fill(v.sourceLabel) : '';
+    const target = typeof v?.targetLabel === 'string' ? fill(v.targetLabel) : '';
+    if (source) out.sourceLabel = source;
+    if (target) out.targetLabel = target;
+    return out;
+}
+
+/** A feature edge's labels: its visuals' templates over `{name}` and `{multiplicity}`, else the feature's name in the middle. */
+function featureLabels(name: string, f: IRFeature | undefined): Omit<FlowEdge['data'], 'relation'> {
+    const fill = (template: string) => template
+        .replace(/\{name\}/g, name)
+        .replace(/\{multiplicity\}/g, f ? multiplicityText(f.multiplicity) : '')
+        .trim();
+    const v = edgeVisual(f);
+    return { label: typeof v?.label === 'string' ? fill(v.label) : name, feature: name, ...endLabels(v, fill) };
+}
+
+/** How a reference or containment feature's edges are drawn, if it says. */
+function edgeVisual(f: IRFeature | undefined): IRVisual | undefined {
+    return f && f.feature !== 'property' ? f.visual : undefined;
+}
+
+/** UML style: `1`, `0..1`, `0..*`, `1..*`. */
+function multiplicityText(m: IRMultiplicity): string {
+    const upper = m.upper === null ? '*' : String(m.upper);
+    return m.lower === m.upper ? upper : `${m.lower}..${upper}`;
+}
+
+/** A hex color as RGBA 0..1, or undefined if it isn't one. */
+function rgba(hex: string): [number, number, number, number] | undefined {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(hex);
+    if (!m) return undefined;
+    const h = m[1].length === 3 ? [...m[1]].map(c => c + c).join('') : m[1];
+    const n = (i: number) => parseInt(h.slice(i, i + 2), 16) / 255;
+    return [n(0), n(2), n(4), h.length === 8 ? n(6) : 1];
 }
 
 /** A kind's resolved visuals as renderer visuals. Shared by nodes and palette entries so they look the same. */
@@ -312,9 +437,9 @@ function containerOf(index: IRIndex): (el: IRElement) => string | undefined {
  */
 function placeElements(
     doc: IRDocument, layout: Layout, index: IRIndex, size: Size,
-    nestedIn: (el: IRElement) => string | undefined, compartments: Map<string, string[]>
+    nestedIn: (el: IRElement) => string | undefined, compartments: Map<string, string[]>, drawn: (id: string) => boolean
 ): Map<string, Box> & { isRow(el: IRElement): boolean } {
-    const elements = doc.models.flatMap(m => m.elements);
+    const elements = doc.models.flatMap(m => m.elements).filter(el => drawn(el.id));
     const children = new Map<string, IRElement[]>();
     for (const el of elements) {
         const owner = nestedIn(el);

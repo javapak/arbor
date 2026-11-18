@@ -29,7 +29,7 @@ export default function PropertyForm({ schema, values, onChange, readOnly }: Pro
         <Stack gap="xs">
             {names.map(name => (
                 <Field key={name} name={name} schema={schema.properties[name]} value={values[name]}
-                    required={schema.required.includes(name)} readOnly={readOnly}
+                    required={schema.required.includes(name)} readOnly={readOnly || schema.properties[name].readOnly}
                     onChange={v => onChange(name, v)} />
             ))}
         </Stack>

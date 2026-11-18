@@ -6,14 +6,16 @@
  * renderable IR.
  */
 import {
-    IR_VERSION,
+    IR_VERSION, deriveReferences,
+    type IRFeatureModifiers,
     type IRDocument, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile,
     type IRScalar, type IRValue
 } from '@arbor/ir';
 import type { Element, Feature, Kind, Model, Profile, Value } from '../language/generated/ast.js';
 import { isListValue, isModel, isProfile, isRefValue } from '../language/generated/ast.js';
 import {
-    allFeatures, bounds, containmentCandidates, elementId, enumId, kindId, literalValue
+    allFeatures, bounds, containmentCandidates, elementId, enumId, hasModifier, kindId, literalValue,
+    oppositeOf, redefinesOf, subsetsOf
 } from '../language/semantics.js';
 
 export function toIR(roots: Array<Profile | Model>): IRDocument {
@@ -29,7 +31,8 @@ export function toIR(roots: Array<Profile | Model>): IRDocument {
             if (!have.has(p.name)) { have.add(p.name); profiles.push(profileToIR(p)); }
         }
     }
-    return { irVersion: IR_VERSION, profiles, models };
+    // Derived references are computed once every model and profile is in.
+    return deriveReferences({ irVersion: IR_VERSION, profiles, models });
 }
 
 // ------------------------------------------------------------ profiles
@@ -56,8 +59,20 @@ function kindToIR(k: Kind): IRKind {
     };
 }
 
+/** The modifiers a feature sets, as IR fields (absent when not set). */
+function modifiersToIR(f: Feature): IRFeatureModifiers {
+    const out: IRFeatureModifiers = {};
+    for (const m of ['ordered', 'unique', 'readonly', 'derived'] as const) if (hasModifier(f, m)) out[m] = true;
+    const opposite = f.$type === 'PropFeature' ? undefined : oppositeOf(f);
+    if (opposite) out.opposite = opposite;
+    if (subsetsOf(f).length) out.subsets = subsetsOf(f);
+    if (redefinesOf(f).length) out.redefines = redefinesOf(f);
+    return out;
+}
+
 function featureToIR(f: Feature): IRFeature[] {
     const multiplicity = bounds(f.multiplicity, f.$type);
+    const modifiers = modifiersToIR(f);
     switch (f.$type) {
         case 'PropFeature': {
             const type = f.type.$type === 'PrimitiveTypeRef'
@@ -66,7 +81,8 @@ function featureToIR(f: Feature): IRFeature[] {
             if (!type) return [];
             return [{
                 feature: 'property', name: f.name, type, multiplicity,
-                ...(f.default ? { default: literalValue(f.default) } : {})
+                ...(f.default ? { default: literalValue(f.default) } : {}),
+                ...modifiers
             }];
         }
         case 'ContainsFeature':
@@ -74,7 +90,8 @@ function featureToIR(f: Feature): IRFeature[] {
             if (!f.target.ref) return [];
             return [{
                 feature: f.$type === 'ContainsFeature' ? 'contains' : 'ref',
-                name: f.name, target: kindId(f.target.ref), multiplicity
+                name: f.name, target: kindId(f.target.ref), multiplicity, ...modifiers,
+                ...(f.edge ? { visual: Object.fromEntries(f.edge.entries.map(e => [e.key, literalValue(e.value)])) } : {})
             }];
     }
 }
@@ -105,7 +122,7 @@ function modelToIR(m: Model): IRModel {
         }
         for (const slot of el.slots) {
             const f = features.get(slot.name);
-            if (!f || f.$type === 'ContainsFeature') continue;
+            if (!f || f.$type === 'ContainsFeature' || hasModifier(f, 'derived')) continue;   // derived: computed later
             if (f.$type === 'RefFeature') {
                 ir.references[slot.name] = refTargets(slot.value);
             } else {

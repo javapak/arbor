@@ -10,7 +10,10 @@ const noop = () => {};
 export default function DiagramPane() {
     const { loadDiagram, fitToContent, selectNode, nodes, interaction } = useDiagram();
     const selected = useRef<string | null>(null);
-    selected.current = interaction.selectedNodes.length === 1 ? interaction.selectedNodes[0].id : null;
+    // A node, or an edge that is an element itself (of an edge kind, like a generalization).
+    const edge = interaction.selectedEdges.length === 1 && interaction.selectedNodes.length === 0 ? interaction.selectedEdges[0] : undefined;
+    selected.current = interaction.selectedNodes.length === 1 ? interaction.selectedNodes[0].id
+        : edge?.data?.relation === 'element' ? edge.id : null;
     const ir = useDiagramStore(s => s.ir);
     const viewRevision = useDiagramStore(s => s.viewRevision);
     const resyncRequest = useDiagramStore(s => s.resyncRequest);

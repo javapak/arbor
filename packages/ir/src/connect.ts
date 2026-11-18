@@ -7,10 +7,13 @@ import { isMany } from './form.js';
 import type { IRIndex } from './query.js';
 import type { IRElement, IRReference } from './types.js';
 
-/** The reference slots of `source` whose type `target` is (or extends), in the kind's order. */
+/**
+ * The reference slots of `source` whose type `target` is (or extends), in the kind's order.
+ * Not derived or readonly ones: those aren't edited from a diagram.
+ */
 export function referenceSlotsFor(index: IRIndex, source: IRElement, target: IRElement): IRReference[] {
     return index.features(source.kind)
-        .filter((f): f is IRReference => f.feature === 'ref' && index.isA(target.kind, f.target));
+        .filter((f): f is IRReference => f.feature === 'ref' && index.isA(target.kind, f.target) && !f.derived && !f.readonly);
 }
 
 /**

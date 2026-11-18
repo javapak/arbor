@@ -42,13 +42,32 @@ export interface IRKind {
 
 export type IRFeature = IRProperty | IRContainment | IRReference;
 
+/**
+ * MOF/UML feature modifiers, present only when set. A derived feature's values
+ * are computed, never written: a reference with an `opposite` gets the elements
+ * pointing at (or containing) the element, and one that others `subsets` gets
+ * the union of theirs. Features named in `redefines` are replaced by this one.
+ */
+export interface IRFeatureModifiers {
+    ordered?: true;
+    unique?: true;
+    readonly?: true;
+    derived?: true;
+    /** The feature of the target kind that points back (references and containments only). */
+    opposite?: string;
+    /** Features of the same kind whose values include this one's. */
+    subsets?: string[];
+    /** Inherited features this one replaces. */
+    redefines?: string[];
+}
+
 export interface IRMultiplicity {
     lower: number;
     /** `null` means unbounded (`*`). */
     upper: number | null;
 }
 
-export interface IRProperty {
+export interface IRProperty extends IRFeatureModifiers {
     feature: 'property';
     name: string;
     type: IRPrimitiveType | { enum: string };
@@ -56,20 +75,24 @@ export interface IRProperty {
     default?: IRScalar;
 }
 
-export interface IRContainment {
+export interface IRContainment extends IRFeatureModifiers {
     feature: 'contains';
     name: string;
     /** Kind ID. */
     target: string;
     multiplicity: IRMultiplicity;
+    /** How the feature's edges are drawn (EDGE_VISUAL_KEYS), when it sets that. */
+    visual?: IRVisual;
 }
 
-export interface IRReference {
+export interface IRReference extends IRFeatureModifiers {
     feature: 'ref';
     name: string;
     /** Kind ID. */
     target: string;
     multiplicity: IRMultiplicity;
+    /** How the feature's edges are drawn (EDGE_VISUAL_KEYS), when it sets that. */
+    visual?: IRVisual;
 }
 
 export type IRPrimitiveType = 'string' | 'int' | 'float' | 'bool';

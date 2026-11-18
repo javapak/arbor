@@ -52,13 +52,41 @@ export function findInheritanceCycle(kind: Kind): Kind[] | undefined {
     return c && c[0] === kind ? c : undefined;
 }
 
-/** All features including inherited ones. Nearest definition wins. */
+/**
+ * All features including inherited ones. Nearest definition wins, and
+ * features a nearer one `redefines` are left out.
+ */
 export function allFeatures(kind: Kind): Map<string, Feature> {
     const byName = new Map<string, Feature>();
+    const redefined = new Set<string>();
     for (const k of lineage(kind)) {
-        for (const f of k.features) if (!byName.has(f.name)) byName.set(f.name, f);
+        for (const f of k.features) {
+            if (byName.has(f.name) || redefined.has(f.name)) continue;
+            byName.set(f.name, f);
+            redefinesOf(f).forEach(n => redefined.add(n));
+        }
     }
     return byName;
+}
+
+// ------------------------------------------------------------ feature modifiers
+
+export function hasModifier(f: Feature, modifier: 'ordered' | 'unique' | 'readonly' | 'derived'): boolean {
+    return f.modifiers.includes(modifier);
+}
+
+/** The target kind's feature this one is the opposite of, if it names one. */
+export function oppositeOf(f: Feature): string | undefined {
+    for (const c of f.clauses) if (c.$type === 'OppositeClause') return c.feature;
+    return undefined;
+}
+
+export function subsetsOf(f: Feature): string[] {
+    return f.clauses.flatMap(c => (c.$type === 'SubsetsClause' ? c.features : []));
+}
+
+export function redefinesOf(f: Feature): string[] {
+    return f.clauses.flatMap(c => (c.$type === 'RedefinesClause' ? c.features : []));
 }
 
 // ------------------------------------------------------------ multiplicity
@@ -75,6 +103,7 @@ export function bounds(m: Multiplicity | undefined, feature: Feature['$type']): 
 
 export function isRequired(f: Feature): boolean {
     if (isPropFeature(f) && f.default) return false;
+    if (hasModifier(f, 'derived')) return false;   // computed, never written
     return bounds(f.multiplicity, f.$type).lower >= 1;
 }
 
@@ -82,14 +111,28 @@ export function isRequired(f: Feature): boolean {
 
 /**
  * Which containment feature of `parent` holds a nested element of kind `child`.
- * Returns all candidates; exactly one means unambiguous.
+ * Returns all candidates; exactly one means unambiguous. Derived containments
+ * (unions) hold nothing directly, and a containment that another candidate
+ * subsets gives way to it: the child goes in the most specific one.
  */
 export function containmentCandidates(parent: Kind, child: Kind): ContainsFeature[] {
+    const features = allFeatures(parent);
     const out: ContainsFeature[] = [];
-    for (const f of allFeatures(parent).values()) {
-        if (f.$type === 'ContainsFeature' && f.target.ref && isA(child, f.target.ref)) out.push(f);
+    for (const f of features.values()) {
+        if (f.$type === 'ContainsFeature' && f.target.ref && isA(child, f.target.ref) && !hasModifier(f, 'derived')) out.push(f);
     }
-    return out;
+    // Every containment a feature subsets, directly or through others.
+    const supersets = (f: Feature, seen = new Set<string>()): Set<string> => {
+        for (const name of subsetsOf(f)) {
+            if (seen.has(name)) continue;
+            seen.add(name);
+            const sup = features.get(name);
+            if (sup) supersets(sup, seen);
+        }
+        return seen;
+    };
+    const covered = new Set(out.flatMap(f => [...supersets(f)]));
+    return out.filter(f => !covered.has(f.name));
 }
 
 // ------------------------------------------------------------ values

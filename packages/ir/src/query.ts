@@ -34,13 +34,41 @@ export class IRIndex {
         return this.lineage(kindId).some(k => k.id === ancestorId);
     }
 
-    /** All features of a kind including inherited ones. Nearest definition wins. */
+    /**
+     * All features of a kind including inherited ones. Nearest definition wins,
+     * and features a nearer one `redefines` are left out.
+     */
     features(kindId: string): IRFeature[] {
         const byName = new Map<string, IRFeature>();
+        const redefined = new Set<string>();
         for (const k of this.lineage(kindId)) {
-            for (const f of k.features) if (!byName.has(f.name)) byName.set(f.name, f);
+            for (const f of k.features) {
+                if (byName.has(f.name) || redefined.has(f.name)) continue;
+                byName.set(f.name, f);
+                f.redefines?.forEach(n => redefined.add(n));
+            }
         }
         return [...byName.values()];
+    }
+
+    /** One feature of a kind, by name (see `features`). */
+    feature(kindId: string, name: string): IRFeature | undefined {
+        return this.features(kindId).find(f => f.name === name);
+    }
+
+    /**
+     * A reference's targets including those of the references that subset it
+     * (UML: a superset holds its subsets' values). Written values first.
+     */
+    values(element: IRElement, name: string, seen = new Set<string>()): string[] {
+        const out = new Set(element.references[name] ?? []);
+        seen.add(name);
+        for (const f of this.features(element.kind)) {
+            if (f.feature === 'ref' && f.subsets?.includes(name) && !seen.has(f.name)) {
+                this.values(element, f.name, seen).forEach(v => out.add(v));
+            }
+        }
+        return [...out];
     }
 
     /** Visual hints merged down the lineage. Nearest definition wins. */

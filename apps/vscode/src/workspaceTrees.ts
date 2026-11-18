@@ -143,14 +143,21 @@ abstract class OutlineTree implements vscode.TreeDataProvider<Node> {
             case 'feature': {
                 const f = n.feature;
                 const p = owner(n.kind.id);
+                // Modifiers before, as written; relations to other features after.
+                const before = (['derived', 'readonly', 'ordered', 'unique'] as const).filter(m => f[m]).map(m => `${m} `).join('');
+                const after = [
+                    f.opposite ? `opposite ${f.opposite}` : '',
+                    f.subsets?.length ? `subsets ${f.subsets.join(', ')}` : '',
+                    f.redefines?.length ? `redefines ${f.redefines.join(', ')}` : '',
+                ].filter(Boolean).map(c => ` ${c}`).join('');
                 if (f.feature === 'property') {
                     const type = typeof f.type === 'object' ? short(f.type.enum, p) : f.type;
                     const dflt = f.default !== undefined ? ` = ${literal(f.default, typeof f.type === 'object')}` : '';
-                    return item(f.name, 'symbol-property', `${type} ${multiplicity(f)}${dflt}`);
+                    return item(f.name, 'symbol-property', `${before}${type} ${multiplicity(f)}${dflt}${after}`);
                 }
                 return f.feature === 'contains'
-                    ? item(f.name, 'symbol-structure', `contains ${short(f.target, p)} ${multiplicity(f)}`)
-                    : item(f.name, 'references', `-> ${short(f.target, p)} ${multiplicity(f)}`);
+                    ? item(f.name, 'symbol-structure', `${before}contains ${short(f.target, p)} ${multiplicity(f)}${after}`)
+                    : item(f.name, 'references', `${before}-> ${short(f.target, p)} ${multiplicity(f)}${after}`);
             }
             case 'enum':
                 return item(n.e.name, 'symbol-enum', `${n.e.literals.length} literals`);

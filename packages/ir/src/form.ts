@@ -30,6 +30,8 @@ export interface ScalarSchema {
     enum?: string[];
     oneOf?: Array<{ const: string; title: string }>;
     default?: IRScalar;
+    /** Derived (worked out from the model) or readonly: shown, not edited. */
+    readOnly?: boolean;
     /** `property` or `ref`. */
     'x-arbor-feature': 'property' | 'ref';
     /** Enum ID (properties) or target kind ID (references). */
@@ -43,6 +45,7 @@ export interface ListSchema {
     minItems?: number;
     maxItems?: number;
     uniqueItems?: boolean;
+    readOnly?: boolean;
     'x-arbor-feature': 'property' | 'ref';
     'x-arbor-type'?: string;
 }
@@ -61,18 +64,20 @@ export function slotSchema(doc: IRDocument | IRIndex, kindId: string): SlotSchem
     for (const f of index.features(kindId)) {
         if (f.feature === 'contains') continue;
         const item = itemSchema(f, index, enums);
+        const readOnly = f.derived || f.readonly ? { readOnly: true } : {};
         properties[f.name] = isMany(f.multiplicity)
             ? {
                 title: f.name, type: 'array', items: item,
                 ...(f.multiplicity.lower > 0 ? { minItems: f.multiplicity.lower } : {}),
                 ...(f.multiplicity.upper !== null ? { maxItems: f.multiplicity.upper } : {}),
-                ...(f.feature === 'ref' ? { uniqueItems: true } : {}),
+                ...(f.feature === 'ref' || f.unique ? { uniqueItems: true } : {}),
+                ...readOnly,
                 'x-arbor-feature': item['x-arbor-feature'],
                 ...(item['x-arbor-type'] ? { 'x-arbor-type': item['x-arbor-type'] } : {}),
             }
-            : { title: f.name, ...item };
+            : { title: f.name, ...item, ...readOnly };
         const defaulted = f.feature === 'property' && f.default !== undefined;
-        if (f.multiplicity.lower > 0 && !defaulted) required.push(f.name);
+        if (f.multiplicity.lower > 0 && !defaulted && !f.derived) required.push(f.name);
     }
     return {
         $schema: 'https://json-schema.org/draft/2020-12/schema',

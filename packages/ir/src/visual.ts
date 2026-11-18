@@ -15,6 +15,12 @@ export const VISUAL_SHAPES = [
 ] as const;
 export type VisualShape = typeof VISUAL_SHAPES[number];
 
+/** Markers at an edge's ends; see EDGE_MARKERS. */
+const EDGE_MARKER_VALUES = [
+    'none', 'arrow', 'filledArrow', 'triangle', 'diamond', 'filledDiamond',
+    'circle', 'dot', 'bar', 'cross', 'square', 'crowFoot'
+] as const;
+
 export interface VisualKeySpec {
     type: 'string' | 'number' | 'bool';
     /** Allowed values, for enumerated strings. */
@@ -37,17 +43,54 @@ export const VISUAL_KEYS = {
     width:      { type: 'number', description: 'default width' },
     height:     { type: 'number', description: 'default height' },
     container:  { type: 'bool', description: 'the node draws the elements it contains inside itself' },
-    member:     { type: 'bool', description: 'drawn inside whatever contains it, as a row (like a UML attribute)' }
+    member:     { type: 'bool', description: 'drawn inside whatever contains it, as a row (like a UML attribute)' },
+    // A kind with both `source` and `target` is drawn as an edge between them, like a UML generalization.
+    source:     { type: 'string', description: 'draw elements of this kind as edges: from this reference\'s target, or "owner" (the containing element)' },
+    target:     { type: 'string', description: 'draw elements of this kind as edges: to this reference\'s target, or "owner"' },
+    line:       { type: 'string', values: ['solid', 'dashed', 'dotted'], description: 'an edge kind\'s line' },
+    sourceMarker: { type: 'string', values: EDGE_MARKER_VALUES, description: 'an edge kind\'s marker at its source' },
+    targetMarker: { type: 'string', values: EDGE_MARKER_VALUES, description: 'an edge kind\'s marker at its target' },
+    sourceLabel: { type: 'string', description: 'an edge kind\'s text at its source end: a label template' },
+    targetLabel: { type: 'string', description: 'an edge kind\'s text at its target end: a label template' }
 } as const satisfies Record<string, VisualKeySpec>;
 export type VisualKey = keyof typeof VISUAL_KEYS;
+
+/** Markers at an edge's ends. `arrow` is open (a UML navigable end), `triangle` hollow (generalization). */
+export const EDGE_MARKERS = EDGE_MARKER_VALUES;
+export type EdgeMarker = typeof EDGE_MARKERS[number];
+
+/** `source` / `target` value meaning the element's owner rather than a reference. */
+export const OWNER_END = 'owner';
+
+/**
+ * How a `ref` or `contains` feature's edges are drawn, in braces after it:
+ * `ref general: Classifier [1] { targetMarker: "triangle" }`. Templates may
+ * use `{name}` (the feature's name) and `{multiplicity}` (as `0..*`).
+ */
+export const EDGE_VISUAL_KEYS = {
+    line:         VISUAL_KEYS.line,
+    sourceMarker: { type: 'string', values: EDGE_MARKERS, description: 'marker at the owning element\'s end' },
+    targetMarker: { type: 'string', values: EDGE_MARKERS, description: 'marker at the target\'s end' },
+    color:        { type: 'string', format: 'hex-color', description: 'line color' },
+    label:        { type: 'string', description: 'text at the middle: a template, "" for none (default {name})' },
+    sourceLabel:  { type: 'string', description: 'text at the owning element\'s end: a template' },
+    targetLabel:  { type: 'string', description: 'text at the target\'s end: a template, e.g. "{name} {multiplicity}"' },
+    hidden:       { type: 'bool', description: 'don\'t draw the feature\'s edges (derived references default to true)' }
+} as const satisfies Record<string, VisualKeySpec>;
+export type EdgeVisualKey = keyof typeof EDGE_VISUAL_KEYS;
 
 export function isVisualKey(key: string): key is VisualKey {
     return Object.hasOwn(VISUAL_KEYS, key);
 }
 
-/** Returns a problem description if `value` does not fit `key`, else undefined. */
-export function checkVisualValue(key: VisualKey, value: IRScalar): string | undefined {
-    const spec: VisualKeySpec = VISUAL_KEYS[key];
+export function isEdgeVisualKey(key: string): key is EdgeVisualKey {
+    return Object.hasOwn(EDGE_VISUAL_KEYS, key);
+}
+
+/** Returns a problem description if `value` does not fit the key's spec, else undefined. */
+export function checkVisualValue(key: string, value: IRScalar, keys: Record<string, VisualKeySpec> = VISUAL_KEYS): string | undefined {
+    const spec: VisualKeySpec | undefined = keys[key];
+    if (!spec) return 'unknown key';
     const actual = typeof value === 'boolean' ? 'bool' : typeof value;
     if (actual !== spec.type) return `expected a ${spec.type === 'bool' ? 'true/false' : spec.type}`;
     if (typeof value !== 'string') return undefined;

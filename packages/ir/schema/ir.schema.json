@@ -77,7 +77,13 @@
               ]
             },
             "multiplicity": { "$ref": "#/$defs/multiplicity" },
-            "default": { "$ref": "#/$defs/scalar" }
+            "default": { "$ref": "#/$defs/scalar" },
+            "ordered": { "const": true },
+            "unique": { "const": true },
+            "readonly": { "const": true },
+            "derived": { "const": true },
+            "subsets": { "type": "array", "items": { "type": "string" } },
+            "redefines": { "type": "array", "items": { "type": "string" } }
           }
         },
         {
@@ -88,7 +94,15 @@
             "feature": { "enum": ["contains", "ref"] },
             "name": { "type": "string" },
             "target": { "type": "string" },
-            "multiplicity": { "$ref": "#/$defs/multiplicity" }
+            "multiplicity": { "$ref": "#/$defs/multiplicity" },
+            "visual": { "type": "object", "additionalProperties": { "$ref": "#/$defs/scalar" } },
+            "opposite": { "type": "string" },
+            "ordered": { "const": true },
+            "unique": { "const": true },
+            "readonly": { "const": true },
+            "derived": { "const": true },
+            "subsets": { "type": "array", "items": { "type": "string" } },
+            "redefines": { "type": "array", "items": { "type": "string" } }
           }
         }
       ]

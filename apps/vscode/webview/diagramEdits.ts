@@ -77,15 +77,22 @@ function connect(sourceId: string, targetId: string) {
     post({ type: 'connect', id: sourceId, target: targetId, slots });
 }
 
-/** Deleting a reference edge removes that reference from the text. Containment edges stay. */
+/**
+ * Deleting a reference edge removes that reference from the text, and deleting an edge that is an
+ * element (of an edge kind) removes the element. Containment edges stay.
+ */
 function disconnect(edge: Extract<DiagramEdit, { kind: 'edge-removed' }>['edge']) {
     const { ir } = useDiagramStore.getState();
+    if (edge.data?.relation === 'element') {
+        post({ type: 'remove-element', id: edge.id });
+        return;
+    }
     if (!ir || edge.data?.relation !== 'reference') {
         return undo('Containment comes from nesting in the text: move or delete the element to change it.');
     }
     const index = new IRIndex(ir);
     const source = index.elements.get(edge.sourceNodeId);
-    const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.label);
+    const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.feature);
     if (!source || slot?.feature !== 'ref') return undo('');
     post({ type: 'set-slot', id: source.id, name: slot.name, value: withoutTarget(source, slot, edge.targetNodeId) });
 }

@@ -86,9 +86,11 @@ const { nodes, edges } = toFlowGraph(ir, { layout: savedLayout, edgeLayout: save
 `FlowNode`/`FlowEdge` in `packages/adapter-flow/src/index.ts` mirror
 [webgpu-flow](https://github.com/javapak/webgpu-flow)'s `DiagramNode`/`DiagramEdge`
 (`src/types/index.ts`), and `SHAPES`/`MarkerType` mirror its `SHAPE_TYPES` and
-`MarkerType`; keep them in step when the renderer changes. The renderer has no
-nesting, so containment is drawn as composition edges (filled diamond at the
-owner; `containment: 'hidden'` drops them) and references as open arrows.
+`MarkerType`; keep them in step when the renderer changes. Containment is drawn
+nested (for `container` and `member` kinds) or as composition edges (filled
+diamond at the owner; `containment: 'hidden'` drops them), and references as
+open arrows. Features can restyle their edges, and kinds with `source` and
+`target` visuals are drawn as edges themselves, like UML generalizations.
 Kinds can use a built-in SDF shape or their own `svg`/`image` (see
 [docs/LANGUAGE.md](docs/LANGUAGE.md)).
 

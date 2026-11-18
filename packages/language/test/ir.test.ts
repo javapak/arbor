@@ -100,12 +100,75 @@ describe('IR -> flow graph', () => {
         expect(r.diagnostics).toEqual([]);
         const g = toFlowGraph(r.ir, { edgeLayout: { 'm.b--link->m.a': [{ x: 5, y: 5 }] } });
         const ref = g.edges.find(e => e.sourceNodeId === 'm.b' && e.targetNodeId === 'm.a')!;
-        expect(ref.data).toEqual({ label: 'link', relation: 'reference' });
+        expect(ref.data).toEqual({ label: 'link', relation: 'reference', feature: 'link' });
         expect(ref.style.targetMarker).toBe('open-arrow');
         expect(ref.userVertices).toEqual([{ x: 5, y: 5 }]);
         const own = g.edges.find(e => e.sourceNodeId === 'm.h' && e.targetNodeId === 'm.h.f')!;
-        expect(own.data).toEqual({ label: 'items', relation: 'containment' });
+        expect(own.data).toEqual({ label: 'items', relation: 'containment', feature: 'items' });
         expect(own.style.sourceMarker).toBe('filled-diamond');
+    });
+
+    it('styles a feature\'s edges from its edge visuals', async () => {
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: `profile p {
+                kind Box {
+                    ref uses:  Box [0..*] { line: "dashed"  targetMarker: "arrow"  label: "«use»"  targetLabel: "{name} {multiplicity}" }
+                    ref quiet: Box [0..1] { hidden: true }
+                    contains parts: Box [0..*] { sourceMarker: "diamond"  color: "#ff0000" }
+                }
+            }` },
+            { uri: 'm.arbor', text: 'model m { Box a { Box b {} } Box c { uses: [-> a]  quiet: -> a } }' }
+        ]);
+        expect(r.diagnostics).toEqual([]);
+        const g = toFlowGraph(r.ir);
+        const uses = g.edges.find(e => e.data.feature === 'uses')!;
+        expect(uses.style).toMatchObject({ dashPattern: [8, 6], targetMarker: 'open-arrow' });
+        expect(uses.data).toMatchObject({ label: '«use»', targetLabel: 'uses 0..*' });
+        expect(g.edges.some(e => e.data.feature === 'quiet')).toBe(false);
+        const parts = g.edges.find(e => e.data.feature === 'parts')!;
+        expect(parts.style).toMatchObject({ sourceMarker: 'diamond', color: [1, 0, 0, 1] });
+    });
+
+    it('draws elements of an edge kind as edges between their ends, and as nodes until both are set', async () => {
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: `profile p {
+                kind Class { contains generalizations: Generalization [0..*]  contains notes: Note [0..*] }
+                kind Generalization {
+                    ref general: Class [1]
+                    contains notes: Note [0..*]
+                    visual { source: "owner"  target: "general"  targetMarker: "triangle"  label: "" }
+                }
+                kind Link {
+                    ref from: Class [1]  ref to: Class [1]  prop role: string [0..1]
+                    visual { source: "from"  target: "to"  line: "dotted"  targetLabel: "{role}" }
+                }
+                kind Note { ref about: Generalization [0..1] }
+            }` },
+            { uri: 'm.arbor', text: `model m {
+                Class A {}
+                Class B { Generalization g { general: -> A  Note n {} } }
+                Class C { Generalization g { general: -> B } Note watcher { about: -> B.g } }
+                Link l { from: -> A  to: -> C  role: "owner" }
+                Link dangling { from: -> A }
+            }` }
+        ]);
+        expect(r.diagnostics.filter(d => d.severity === 'error').map(d => d.code)).toEqual(['ARB105']);
+        const g = toFlowGraph(r.ir, { edgeLayout: { 'm.B.g': [{ x: 1, y: 2 }] } });
+        const gen = g.edges.find(e => e.id === 'm.B.g')!;
+        expect(gen).toMatchObject({ sourceNodeId: 'm.B', targetNodeId: 'm.A', userVertices: [{ x: 1, y: 2 }] });
+        expect(gen.data).toEqual({ label: '', relation: 'element' });
+        expect(gen.style.targetMarker).toBe('inheritance');
+        const link = g.edges.find(e => e.id === 'm.l')!;
+        expect(link).toMatchObject({ sourceNodeId: 'm.A', targetNodeId: 'm.C', style: { dashPattern: [2, 4] } });
+        expect(link.data).toMatchObject({ label: 'l', targetLabel: 'owner' });
+        const ids = g.nodes.map(n => n.id);
+        // Not nodes: the edges, and what they contain. Nor the containment edges to them.
+        expect(ids).not.toContain('m.B.g');
+        expect(ids).not.toContain('m.B.g.n');
+        expect(g.edges.some(e => e.targetNodeId === 'm.B.g' || e.sourceNodeId === 'm.B.g')).toBe(false);
+        // Missing an end: a node, so it can be seen and connected.
+        expect(ids).toContain('m.dangling');
+        expect(ids).toContain('m.C.watcher');
     });
 
     it('finds the reference slots an edge drawn between two elements can set, and their new values', async () => {

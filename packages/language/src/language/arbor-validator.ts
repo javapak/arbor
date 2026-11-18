@@ -11,15 +11,16 @@
  */
 import { AstUtils, type AstNode, type IndexManager, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import type {
-    Element, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual
+    EdgeVisual, Element, Feature, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual, VisualEntry
 } from './generated/ast.js';
 import { isElement, isListValue, isRefValue } from './generated/ast.js';
-import { VISUAL_KEYS, checkVisualValue, isVisualKey, type VisualKeySpec } from '@arbor/ir';
+import { EDGE_VISUAL_KEYS, OWNER_END, VISUAL_KEYS, checkVisualValue, type VisualKeySpec } from '@arbor/ir';
 import type { ArborServices } from './arbor-module.js';
 import type { ArborScopeProvider } from './arbor-scope.js';
 import {
     allFeatures, bounds, checkLiteral, closest, containmentCandidates,
-    elementId, findInheritanceCycle, isA, isRequired, literalValue
+    elementId, findInheritanceCycle, hasModifier, isA, isRequired, lineage, literalValue,
+    oppositeOf, redefinesOf, subsetsOf
 } from './semantics.js';
 
 export const DiagnosticCode = {
@@ -32,6 +33,9 @@ export const DiagnosticCode = {
     UnknownVisualKey: 'ARB006',
     AmbiguousName: 'ARB007',
     BadVisualValue: 'ARB008',
+    BadOpposite: 'ARB009',
+    BadSubsets: 'ARB010',
+    BadRedefines: 'ARB011',
     // models
     AbstractInstance: 'ARB101',
     UnknownSlot: 'ARB102',
@@ -41,7 +45,10 @@ export const DiagnosticCode = {
     ChildNotAllowed: 'ARB106',
     TooMany: 'ARB107',
     DuplicateSlot: 'ARB108',
-    DuplicateId: 'ARB110'
+    DerivedSlot: 'ARB109',
+    DuplicateId: 'ARB110',
+    DuplicateValue: 'ARB111',
+    OppositeMismatch: 'ARB112'
 } as const;
 
 export function registerValidationChecks(services: ArborServices): void {
@@ -53,6 +60,7 @@ export function registerValidationChecks(services: ArborServices): void {
         PropFeature: validator.checkPropFeature,
         Multiplicity: validator.checkMultiplicity,
         Visual: validator.checkVisual,
+        EdgeVisual: validator.checkEdgeVisual,
         Model: validator.checkModel,
         Element: validator.checkElement
     };
@@ -135,6 +143,101 @@ export class ArborValidator {
                 }
             }
         }
+        for (const f of kind.features) {
+            this.checkOpposite(kind, f, accept);
+            this.checkSubsets(kind, f, accept);
+            this.checkRedefines(kind, f, accept);
+        }
+    }
+
+    /**
+     * An opposite is a feature of the target kind that points back at this kind: a reference
+     * (naming this feature back, if it names one) or a containment (then this is the owner, one at most).
+     */
+    private checkOpposite(kind: Kind, f: Feature, accept: ValidationAcceptor): void {
+        const name = oppositeOf(f);
+        const clause = f.clauses.find(c => c.$type === 'OppositeClause');
+        if (!name || !clause) return;
+        const fail = (message: string, fix?: string) =>
+            accept('error', message, { node: clause, code: DiagnosticCode.BadOpposite, data: { fix } });
+        if (f.$type === 'PropFeature') return fail('Only references and containments have opposites.');
+        const target = f.target.ref;
+        if (!target) return;
+        const others = allFeatures(target);
+        const other = others.get(name);
+        if (!other) {
+            const fix = closest(name, [...others.values()].filter(o => o.$type !== 'PropFeature').map(o => o.name));
+            return fail(`${target.name} has no feature '${name}'.${fix ? ` Did you mean '${fix}'?` : ''}`, fix);
+        }
+        if (other.$type === 'PropFeature') return fail(`'${name}' of ${target.name} is a property; an opposite is a reference or a containment.`);
+        if (other.target.ref && !isA(kind, other.target.ref)) {
+            return fail(`'${name}' of ${target.name} points at ${other.target.ref.name}, not ${kind.name}.`);
+        }
+        if (f.$type === 'ContainsFeature' && other.$type === 'ContainsFeature') return fail('Two containments cannot be opposites.');
+        const back = oppositeOf(other);
+        if (back && back !== f.name) return fail(`'${name}' of ${target.name} names '${back}' as its opposite, not '${f.name}'.`);
+        if (other.$type === 'ContainsFeature' && bounds(f.multiplicity, f.$type).upper !== 1) {
+            fail(`'${f.name}' is the owner through '${name}', so it holds one element at most: write [0..1] or [1].`);
+        }
+    }
+
+    /** A feature subsets features of the same kind, of the same sort and type, that allow as many values. */
+    private checkSubsets(kind: Kind, f: Feature, accept: ValidationAcceptor): void {
+        const names = subsetsOf(f);
+        const clause = f.clauses.find(c => c.$type === 'SubsetsClause');
+        if (!names.length || !clause) return;
+        const features = allFeatures(kind);
+        for (const name of names) {
+            const fail = (message: string, fix?: string) =>
+                accept('error', message, { node: clause, code: DiagnosticCode.BadSubsets, data: { fix } });
+            const sup = features.get(name);
+            if (!sup) {
+                const fix = closest(name, [...features.keys()].filter(n => n !== f.name));
+                fail(`${kind.name} has no feature '${name}' to subset.${fix ? ` Did you mean '${fix}'?` : ''}`, fix);
+                continue;
+            }
+            if (sup === f) { fail(`'${f.name}' cannot subset itself.`); continue; }
+            const problem = this.featureMismatch(f, sup);
+            if (problem) { fail(`'${f.name}' cannot subset '${name}': ${problem}.`); continue; }
+            const mine = bounds(f.multiplicity, f.$type).upper, theirs = bounds(sup.multiplicity, sup.$type).upper;
+            if (theirs !== null && (mine === null || mine > theirs)) {
+                fail(`'${f.name}' allows more values than '${name}' (${theirs}), which holds them all.`);
+            }
+        }
+    }
+
+    /** A feature redefines inherited features of the same sort and type. */
+    private checkRedefines(kind: Kind, f: Feature, accept: ValidationAcceptor): void {
+        const names = redefinesOf(f);
+        const clause = f.clauses.find(c => c.$type === 'RedefinesClause');
+        if (!names.length || !clause) return;
+        const inherited = new Map<string, Feature>();
+        for (const sup of kind.supers) if (sup.ref) for (const [n, g] of allFeatures(sup.ref)) if (!inherited.has(n)) inherited.set(n, g);
+        for (const name of names) {
+            const fail = (message: string, fix?: string) =>
+                accept('error', message, { node: clause, code: DiagnosticCode.BadRedefines, data: { fix } });
+            const prev = inherited.get(name);
+            if (!prev) {
+                const fix = closest(name, inherited.keys());
+                fail(`${kind.name} inherits no feature '${name}' to redefine.${fix ? ` Did you mean '${fix}'?` : ''}`, fix);
+                continue;
+            }
+            const problem = this.featureMismatch(f, prev);
+            if (problem) fail(`'${f.name}' cannot redefine '${name}': ${problem}.`);
+        }
+    }
+
+    /** Why `f`'s values can't stand for `g`'s: a different sort of feature, or a type that isn't g's (or a kind of it). */
+    private featureMismatch(f: Feature, g: Feature): string | undefined {
+        if (f.$type !== g.$type) return `one is a ${sortOf(f)}, the other a ${sortOf(g)}`;
+        if (f.$type === 'PropFeature' && g.$type === 'PropFeature') {
+            const type = (p: PropFeature) => (p.type.$type === 'PrimitiveTypeRef' ? p.type.primitive : p.type.enum.ref);
+            return type(f) === type(g) ? undefined : 'their types differ';
+        }
+        if (f.$type !== 'PropFeature' && g.$type !== 'PropFeature' && f.target.ref && g.target.ref && !isA(f.target.ref, g.target.ref)) {
+            return `${f.target.ref.name} isn't ${g.target.ref.name} or a kind of it`;
+        }
+        return undefined;
     }
 
     checkPropFeature(prop: PropFeature, accept: ValidationAcceptor): void {
@@ -159,18 +262,44 @@ export class ArborValidator {
 
     /** Keys and values come from the IR's renderer-neutral visual vocabulary. Unknown ones are warnings. */
     checkVisual(visual: Visual, accept: ValidationAcceptor): void {
+        this.checkVisualEntries(visual.entries, VISUAL_KEYS, accept);
+        // An edge kind's ends are references of the kind (or its owner).
+        const kind = visual.$container;
+        const refs = [...allFeatures(kind).values()].filter(f => f.$type === 'RefFeature').map(f => f.name);
         for (const e of visual.entries) {
-            if (!isVisualKey(e.key)) {
-                const fix = closest(e.key, Object.keys(VISUAL_KEYS));
+            if (e.key !== 'source' && e.key !== 'target') continue;
+            const value = literalValue(e.value);
+            if (typeof value !== 'string' || value === OWNER_END || refs.includes(value)) continue;
+            const fix = closest(value, [OWNER_END, ...refs]);
+            accept('warning',
+                `Visual '${e.key}': ${kind.name} has no reference '${value}' (or use "${OWNER_END}").${fix ? ` Did you mean '${fix}'?` : ''}`,
+                { node: e, property: 'value', code: DiagnosticCode.BadVisualValue, data: { fix } });
+        }
+        const keys = new Set(lineage(kind).flatMap(k => k.visuals.flatMap(v => v.entries.map(e => e.key))));
+        if (visual === kind.visuals.at(-1) && keys.has('source') !== keys.has('target')) {
+            accept('warning', `Visual: an edge kind needs both 'source' and 'target'.`,
+                { node: visual, code: DiagnosticCode.BadVisualValue });
+        }
+    }
+
+    /** A feature's edge style: the edge keys only. */
+    checkEdgeVisual(edge: EdgeVisual, accept: ValidationAcceptor): void {
+        this.checkVisualEntries(edge.entries, EDGE_VISUAL_KEYS, accept);
+    }
+
+    private checkVisualEntries(entries: VisualEntry[], keys: Record<string, VisualKeySpec>, accept: ValidationAcceptor): void {
+        for (const e of entries) {
+            if (!Object.hasOwn(keys, e.key)) {
+                const fix = closest(e.key, Object.keys(keys));
                 accept('warning',
                     `Unknown visual key '${e.key}'.${fix ? ` Did you mean '${fix}'?` : ''}`,
                     { node: e, property: 'key', code: DiagnosticCode.UnknownVisualKey, data: { fix } });
                 continue;
             }
             const value = literalValue(e.value);
-            const problem = checkVisualValue(e.key, value);
+            const problem = checkVisualValue(e.key, value, keys);
             if (problem) {
-                const spec: VisualKeySpec = VISUAL_KEYS[e.key];
+                const spec = keys[e.key];
                 const fix = spec.values && typeof value === 'string' ? closest(value, spec.values) : undefined;
                 accept('warning',
                     `Visual '${e.key}': ${problem}.${fix ? ` Did you mean '${fix}'?` : ''}`,
@@ -256,6 +385,33 @@ export class ArborValidator {
         }
     }
 
+    /**
+     * Both ends of a pair of written opposite references must agree: an element this one
+     * points at points back. Derived ends are worked out, so they always agree.
+     */
+    private checkOppositeValues(slot: Slot, f: import('./generated/ast.js').RefFeature, accept: ValidationAcceptor): void {
+        const name = oppositeOf(f);
+        const target = f.target.ref;
+        if (!name || !target) return;
+        const other = allFeatures(target).get(name);
+        if (other?.$type !== 'RefFeature' || hasModifier(other, 'derived')) return;
+        const el = AstUtils.getContainerOfType(slot, isElement);
+        if (!el) return;
+        const id = elementId(el);
+        const items: Value[] = isListValue(slot.value) ? slot.value.items : [slot.value];
+        for (const v of items) {
+            const t = isRefValue(v) ? v.target.ref : undefined;
+            if (!t || !isElement(t)) continue;
+            const back = t.slots.find(s => s.name === name);
+            const values = back ? (isListValue(back.value) ? back.value.items : [back.value]) : [];
+            const points = values.some(b => isRefValue(b) && b.target.ref && isElement(b.target.ref) && elementId(b.target.ref) === id);
+            if (!points) {
+                accept('warning', `'${slot.name}' and '${name}' are opposites, but ${t.name}'s '${name}' doesn't point back at ${el.name}.`,
+                    { node: v, code: DiagnosticCode.OppositeMismatch, data: { element: elementId(t), slot: name } });
+            }
+        }
+    }
+
     private checkSlot(kind: Kind, slot: Slot, features: Map<string, import('./generated/ast.js').Feature>, accept: ValidationAcceptor): void {
         const f = features.get(slot.name);
         if (!f) {
@@ -270,6 +426,12 @@ export class ArborValidator {
                 { node: slot, property: 'name', code: DiagnosticCode.TypeMismatch });
             return;
         }
+        if (hasModifier(f, 'derived')) {
+            const from = oppositeOf(f) ? ` from the elements' '${oppositeOf(f)}'` : '';
+            accept('error', `'${slot.name}' is derived: it is worked out${from}, not written.`,
+                { node: slot, property: 'name', code: DiagnosticCode.DerivedSlot });
+            return;
+        }
 
         const items: Value[] = isListValue(slot.value) ? slot.value.items : [slot.value];
         const { upper } = bounds(f.multiplicity, f.$type);
@@ -280,6 +442,20 @@ export class ArborValidator {
             accept('error', `'${slot.name}' allows at most ${upper} values, found ${items.length}.`,
                 { node: slot, property: 'value', code: DiagnosticCode.TooMany });
         }
+
+        if (hasModifier(f, 'unique')) {
+            const seen = new Set<string>();
+            for (const v of items) {
+                const key = isRefValue(v) ? `->${v.target.ref ? elementId(v.target.ref as Element) : v.target.$refText}`
+                    : isListValue(v) ? '' : JSON.stringify(literalValue(v));
+                if (key && seen.has(key)) {
+                    accept('error', `'${slot.name}' is unique; this value is already in it.`,
+                        { node: v, code: DiagnosticCode.DuplicateValue });
+                }
+                seen.add(key);
+            }
+        }
+        if (f.$type === 'RefFeature') this.checkOppositeValues(slot, f, accept);
 
         for (const v of items) {
             if (f.$type === 'RefFeature') {
@@ -308,4 +484,8 @@ export class ArborValidator {
             }
         }
     }
+}
+
+function sortOf(f: Feature): string {
+    return f.$type === 'PropFeature' ? 'property' : f.$type === 'RefFeature' ? 'reference' : 'containment';
 }

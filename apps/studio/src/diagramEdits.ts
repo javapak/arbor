@@ -54,9 +54,13 @@ async function addElement(edit: Extract<DiagramEdit, { kind: 'node-added' }>) {
 
 async function removeElement(edit: Extract<DiagramEdit, { kind: 'node-removed' }>) {
   if (typeof edit.node.data.kind !== 'string') return undo('');
+  await removeById(edit.node.id, edit.node.data.label ?? edit.node.id);
+}
+
+async function removeById(id: string, label: string) {
   const s = useStudio.getState();
-  const plan = await planRemoveElement(sources(s.files), edit.node.id);
-  if ('error' in plan) return undo(`Couldn't remove ${edit.node.data.label}: ${plan.error}.`);
+  const plan = await planRemoveElement(sources(s.files), id);
+  if ('error' in plan) return undo(`Couldn't remove ${label}: ${plan.error}.`);
   s.applyTextEdit(plan);
   s.setActive(plan.uri);
   s.setNotice(null);
@@ -84,15 +88,19 @@ async function connect(sourceId: string, targetId: string) {
   await setSlot(sourceId, slot.name, withTarget(source, slot, targetId));
 }
 
-/** Deleting a reference edge removes that reference from the text. Containment edges stay. */
+/**
+ * Deleting a reference edge removes that reference from the text, and deleting an edge that is an
+ * element (of an edge kind) removes the element. Containment edges stay.
+ */
 async function disconnect(edge: Extract<DiagramEdit, { kind: 'edge-removed' }>['edge']) {
+  if (edge.data?.relation === 'element') return removeById(edge.id, String(edge.data?.label || edge.id));
   if (edge.data?.relation !== 'reference') {
     return undo('Containment comes from nesting in the text: move or delete the element to change it.');
   }
   const s = useStudio.getState();
   const index = new IRIndex((await loadWorkspace(sources(s.files))).ir);
   const source = index.elements.get(edge.sourceNodeId);
-  const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.label);
+  const slot = source && index.features(source.kind).find(f => f.feature === 'ref' && f.name === edge.data?.feature);
   if (!source || slot?.feature !== 'ref') return undo('');
   await setSlot(source.id, slot.name, withoutTarget(source, slot, edge.targetNodeId));
 }
