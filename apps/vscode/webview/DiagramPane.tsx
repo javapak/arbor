@@ -33,8 +33,9 @@ export default function DiagramPane() {
         const has = (id: string | null) => !!id && graph.nodes.some(n => n.id === id);
         // A pending element not drawn yet (just added, its text edit still on the way) stays pending.
         if (!has(pendingSelect) && has(selected.current)) setPendingSelect(selected.current);
-        // Pin auto-placed nodes, so adding an element doesn't reshuffle the others.
-        const placed = graph.nodes.filter(n => !layout[n.id]);
+        // Pin auto-placed nodes, so adding an element doesn't reshuffle the others. Nodes inside a
+        // container are arranged by it and have no place of their own.
+        const placed = graph.nodes.filter(n => !layout[n.id] && !n.parentId);
         if (placed.length) {
             const entries = Object.fromEntries(placed.map(n => [n.id, { ...n.data.position }]));
             setLayout(l => ({ ...l, ...entries }));

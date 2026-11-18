@@ -22,6 +22,8 @@ export interface DiagramState {
     /** Element to select once the next redraw has it. */
     pendingSelect: string | null;
     dark: boolean;
+    /** The layout worker is loaded (see main.tsx). */
+    layoutReady: boolean;
 
     setLayout: (update: (layout: Layout) => Layout) => void;
     setEdgeLayout: (update: (layout: EdgeLayout) => EdgeLayout) => void;
@@ -42,6 +44,7 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     resyncRequest: 0,
     pendingSelect: null,
     dark: true,
+    layoutReady: false,
 
     setLayout: (update) => set(s => ({ layout: update(s.layout) })),
     setEdgeLayout: (update) => set(s => ({ edgeLayout: update(s.edgeLayout) })),

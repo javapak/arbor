@@ -4,72 +4,90 @@
   "model": "shop.arbor",
   "nodes": {
     "order": {
-      "x": -350,
-      "y": -300
+      "x": -403,
+      "y": 202,
+      "width": 103,
+      "height": 114
     },
     "order.buyer": {
-      "x": 400,
-      "y": 120
-    },
-    "order.id": {
-      "x": -350,
+      "x": -50,
       "y": 350
     },
+    "order.id": {
+      "x": 423,
+      "y": 202
+    },
     "order.total": {
-      "x": 600,
-      "y": 120
+      "x": -13,
+      "y": 134
     },
     "payment": {
-      "x": 1200,
-      "y": 500
+      "x": -1236,
+      "y": -151,
+      "width": 80,
+      "height": 86
     },
     "payment.amount": {
-      "x": 400,
-      "y": 360
+      "x": -403,
+      "y": -139
     },
     "payment.id": {
-      "x": 0,
-      "y": 360
+      "x": 866,
+      "y": -208,
+      "width": 178,
+      "height": 91
     },
     "payment.order": {
-      "x": 200,
-      "y": 360
+      "x": -800,
+      "y": -50,
+      "width": 152,
+      "height": 150
     },
     "shop.Checkout": {
-      "x": 800,
-      "y": 120
+      "x": -1193,
+      "y": 260
     },
     "shop.Checkout.OrderApi": {
-      "x": 1000,
-      "y": 120
+      "x": -1193,
+      "y": 274,
+      "width": 96,
+      "height": 48
     },
     "shop.Checkout.OrderApi.placeOrder": {
-      "x": -600,
-      "y": 100
+      "x": -750,
+      "y": 550
     },
     "shop.Checkout.OrderApi.placeOrder.buyer": {
-      "x": -600,
-      "y": -200
+      "x": -403,
+      "y": 418
     },
     "shop.Checkout.OrderApi.streamStatus": {
-      "x": 400,
-      "y": 240
+      "x": -794,
+      "y": 225
     },
     "shop.Column1": {
       "x": 890,
       "y": 346
     },
+    "shop.Entity1": {
+      "x": -1528,
+      "y": 100,
+      "width": 105,
+      "height": 79
+    },
     "shop.Money": {
-      "x": -700,
-      "y": 400
+      "x": 369,
+      "y": -7
     },
     "shop.Pa": {
       "x": 600,
       "y": 0
     },
     "shop.Package1": {
-      "x": 1150,
-      "y": 500
+      "x": -1203,
+      "y": -467,
+      "width": 262,
+      "height": 175
     },
     "shop.Package1.Checkout": {
       "x": 600,
@@ -116,28 +134,32 @@
       "y": 0
     },
     "shop.Payments": {
-      "x": 600,
-      "y": 240
+      "x": -403,
+      "y": -7,
+      "width": 88,
+      "height": 44
     },
     "shop.Payments.charge": {
-      "x": 800,
-      "y": 240
+      "x": -13,
+      "y": -7
     },
     "shop.Text": {
-      "x": 100,
-      "y": -150
+      "x": 1255,
+      "y": 441
     },
     "shop.UUID": {
-      "x": -300,
-      "y": -100
+      "x": 1255,
+      "y": 220
     },
     "shop.amount": {
       "x": 0,
       "y": 360
     },
     "shop.internal": {
-      "x": 600,
-      "y": 0
+      "x": -1250,
+      "y": -150,
+      "width": 239,
+      "height": 310
     },
     "shop.order": {
       "x": 1000,
@@ -152,19 +174,170 @@
       "y": 0
     },
     "user": {
-      "x": 300,
-      "y": -400,
-      "width": 205,
-      "height": 200
+      "x": 450,
+      "y": 400,
+      "width": 91,
+      "height": 105
     },
     "user.email": {
-      "x": 1300,
-      "y": 0
+      "x": 866,
+      "y": 441
     },
     "user.id": {
-      "x": 800,
-      "y": 0
+      "x": 866,
+      "y": 300
     }
   },
-  "edges": {}
+  "edges": {
+    "order--fields->order.buyer": [
+      {
+        "x": -286,
+        "y": 202
+      },
+      {
+        "x": -286,
+        "y": 341
+      }
+    ],
+    "order--fields->order.total": [
+      {
+        "x": -286,
+        "y": 202
+      },
+      {
+        "x": -286,
+        "y": 134
+      }
+    ],
+    "order.buyer--type->user": [
+      {
+        "x": 97,
+        "y": 341
+      },
+      {
+        "x": 97,
+        "y": 389
+      }
+    ],
+    "order.id--type->shop.UUID": [
+      {
+        "x": 983,
+        "y": 202
+      },
+      {
+        "x": 983,
+        "y": 220
+      }
+    ],
+    "order.total--type->shop.Money": [
+      {
+        "x": 97,
+        "y": 134
+      },
+      {
+        "x": 97,
+        "y": -7
+      }
+    ],
+    "payment.amount--type->shop.Money": [
+      {
+        "x": 97,
+        "y": -139
+      },
+      {
+        "x": 97,
+        "y": -7
+      }
+    ],
+    "payment.id--type->shop.UUID": [
+      {
+        "x": 1003,
+        "y": -208
+      },
+      {
+        "x": 1003,
+        "y": 220
+      }
+    ],
+    "payment.order--type->order": [
+      {
+        "x": -684,
+        "y": 93
+      },
+      {
+        "x": -684,
+        "y": 202
+      }
+    ],
+    "shop.Checkout--requires->shop.Payments": [
+      {
+        "x": -1047,
+        "y": 260
+      },
+      {
+        "x": -1047,
+        "y": -7
+      }
+    ],
+    "shop.Checkout.OrderApi.placeOrder--returns->order": [
+      {
+        "x": -664,
+        "y": 405
+      },
+      {
+        "x": -664,
+        "y": 202
+      }
+    ],
+    "shop.Checkout.OrderApi.placeOrder.buyer--type->user": [
+      {
+        "x": 97,
+        "y": 418
+      },
+      {
+        "x": 97,
+        "y": 389
+      }
+    ],
+    "shop.Checkout.OrderApi.streamStatus--returns->order": [
+      {
+        "x": -684,
+        "y": 225
+      },
+      {
+        "x": -684,
+        "y": 202
+      }
+    ],
+    "user--fields->user.email": [
+      {
+        "x": 585,
+        "y": 389
+      },
+      {
+        "x": 585,
+        "y": 441
+      }
+    ],
+    "user--fields->user.id": [
+      {
+        "x": 585,
+        "y": 389
+      },
+      {
+        "x": 585,
+        "y": 300
+      }
+    ],
+    "user.id--type->shop.UUID": [
+      {
+        "x": 983,
+        "y": 300
+      },
+      {
+        "x": 983,
+        "y": 220
+      }
+    ]
+  }
 }

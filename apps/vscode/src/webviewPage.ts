@@ -7,9 +7,11 @@ export function isDark(theme: vscode.ColorTheme): boolean {
 /**
  * A webview page running `media/<bundle>.js` with its stylesheet. No
  * 'unsafe-eval' (the project's no-eval rule holds here too); inline styles are
- * allowed because Mantine injects its CSS variables at runtime.
+ * allowed because Mantine injects its CSS variables at runtime. `assets` are
+ * other files in media/ the page fetches, passed as `data-*` attributes of
+ * #root holding their URLs.
  */
-export function webviewPage(webview: vscode.Webview, media: vscode.Uri, bundle: string, title: string): string {
+export function webviewPage(webview: vscode.Webview, media: vscode.Uri, bundle: string, title: string, assets: Record<string, string> = {}): string {
     const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
     const asset = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(media, name)).toString();
     const csp = [
@@ -18,6 +20,7 @@ export function webviewPage(webview: vscode.Webview, media: vscode.Uri, bundle: 
         `style-src ${webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com`,
         `font-src ${webview.cspSource} https://fonts.gstatic.com`,
         `img-src ${webview.cspSource} data: blob:`,
+        `connect-src ${webview.cspSource}`,
         `worker-src blob:`,
     ].join('; ');
     return `<!doctype html>
@@ -30,7 +33,7 @@ export function webviewPage(webview: vscode.Webview, media: vscode.Uri, bundle: 
   <title>${title}</title>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"${Object.entries(assets).map(([key, file]) => ` data-${key}="${asset(file)}"`).join('')}></div>
   <script nonce="${nonce}" type="module" src="${asset(`${bundle}.js`)}"></script>
 </body>
 </html>`;

@@ -1,7 +1,8 @@
-# arbor
 
+<div style="display:flex; flex-direction: column; align-items: center"><img src=https://www.svgrepo.com/show/481127/tree.svg alt="tree vector icon" width="150" />
+<h1>arbor</h1></div>
 A small, LLM-friendly meta-modeling language for software models, built on
-[Langium](https://langium.org) (TypeScript, runs in Node and in a browser web
+<a href=https://langium.org>Langium </a> (TypeScript, runs in Node and in a browser web
 worker, no JVM), with an intermediate representation (IR) as the hub between
 the text and everything else, including the WebGPU flow renderer.
 
@@ -126,7 +127,8 @@ direct `loadWorkspace` calls once completion and go-to-definition are wanted.
 `apps/vscode` is the editor for real files: VS Code's own text editor talks to
 the Langium language server (`main-node.ts`, run under
 `--disallow-code-generation-from-strings`), and a custom editor shows the same
-document as a diagram with a property form.
+document as a diagram, with a Properties view in the side bar. The user guide,
+with screenshots, is [docs/VSCODE.md](docs/VSCODE.md).
 
 ```bash
 npm run extension   # builds the packages, then bundles the extension into apps/vscode/dist and media/

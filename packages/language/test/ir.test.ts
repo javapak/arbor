@@ -76,10 +76,13 @@ describe('IR -> flow graph', () => {
         const user = g.nodes.find(n => n.id === 'user')!;
         expect(user.data.position).toEqual({ x: 10, y: 20 });
         expect(user.data.label).toBe('User');
-        expect(user.visual).toMatchObject({ shape: 'rectangle', color: '#f59e0b', container: true });
-        expect(user.visual.visualContent).toMatchObject({ type: 'svg', colorizable: true, size: { width: 64, height: 64 } });
+        expect(user.visual).toMatchObject({ shape: 'rectangle', color: '#f59e0b', container: false });
+        expect(user.visual.visualContent).toMatchObject({ type: 'svg', colorizable: true, size: { width: 256, height: 256 } });
         expect(user.visual.visualContent!.content).toMatch(/^<svg /);
-        expect(user.visual.size).toEqual({ width: 200, height: 80 });
+        // The layout's width is the least a box gets; its properties may widen it. Height: header,
+        // padding and two property lines.
+        expect(user.visual.size.width).toBeGreaterThanOrEqual(200);
+        expect(user.visual.size.height).toBe(28 + 2 * 8 + 2 * 18);
         expect(user.data.size).toEqual(user.visual.size);
         expect(g.nodes.find(n => n.id === 'shop.Checkout')!.visual.shape).toBe('package');
         expect(g.nodes.find(n => n.id === 'user.email')!.data.parentId).toBe('user');
@@ -105,7 +108,14 @@ describe('IR -> flow graph', () => {
         const entity = g.palette!.find(t => t.id === 'persistence.Entity')!;
         expect(entity).toMatchObject({ label: 'Entity', group: 'persistence', type: 'Entity', data: { kind: 'persistence.Entity' } });
         const user = g.nodes.find(n => n.id === 'user')!;
-        expect(entity.visual).toEqual({ ...user.visual, container: false });   // same look as generated nodes
+        // Same look as generated nodes, apart from what the node's own properties add.
+        const { compartment, size, ...look } = user.visual;
+        const { size: templateSize, ...templateLook } = entity.visual;
+        expect(templateLook).toEqual(look);
+        expect(templateSize).toEqual({ width: 160, height: 80 });
+        expect(size.width).toBeGreaterThan(160);
+        // Its properties as written, strings quoted, long lines cut.
+        expect(compartment).toEqual(['tableName = "users"', 'description = "A registered cus…']);
         expect(toFlowGraph(await shopIR(), { palette: false }).palette).toBeUndefined();
     });
 
@@ -118,13 +128,46 @@ describe('IR -> flow graph', () => {
         const b = g.nodes.find(n => n.id === second.id)!.data.position;
         expect(b).toEqual(first.data.position);
         expect(a).not.toEqual(b);
-        const all = g.nodes.map(n => `${n.data.position.x},${n.data.position.y}`);
+        // Nodes inside a container are arranged by the renderer, so only top-level ones have places.
+        const all = g.nodes.filter(n => !n.parentId).map(n => `${n.data.position.x},${n.data.position.y}`);
         expect(new Set(all).size).toBe(all.length);
     });
 
     it('can hide containment edges', async () => {
         const g = toFlowGraph(await shopIR(), { containment: 'hidden' });
         expect(g.edges.every(e => e.data.relation === 'reference')).toBe(true);
+    });
+
+    it('draws the contents of container kinds inside them, as rows, and other containment as edges', async () => {
+        const r = await loadWorkspace([
+            { uri: 'p.arbor', text: `profile p {
+                kind Box  { contains items: Item [0..*]  visual { container: true } }
+                kind Item { contains parts: Part [0..*] }
+                kind Part {}
+            }` },
+            { uri: 'm.arbor', text: 'model m { Box b { Item i { Part x {} } Item j {} } Item k {} }' }
+        ]);
+        expect(r.diagnostics).toEqual([]);
+        const g = toFlowGraph(r.ir);
+        const node = (id: string) => g.nodes.find(n => n.id === id)!;
+        expect(node('m.b.i').parentId).toBe('m.b');
+        expect(node('m.b.j').parentId).toBe('m.b');
+        expect(node('m.b.i.x').parentId).toBeUndefined();
+        expect(node('m.b').visual.container).toBe(true);
+        expect(g.edges.map(e => e.id)).toEqual(['m.b.i--parts->m.b.i.x']);
+        // Elements without nested elements of their own are rows; the container is sized for them
+        // as the renderer arranges them: header, padding, and two rows in one column.
+        expect(node('m.b.i').visual).toMatchObject({ presentation: 'row', detail: '«Item»' });
+        expect(node('m.b').data.size).toEqual({ width: 180 + 2 * 8, height: 28 + 2 * 8 + 26 + 4 + 26 });
+        const box = (id: string) => {
+            const n = node(id);
+            return { l: n.data.position.x - n.data.size.width / 2, r: n.data.position.x + n.data.size.width / 2,
+                t: n.data.position.y - n.data.size.height / 2, b: n.data.position.y + n.data.size.height / 2 };
+        };
+        const b = box('m.b');
+        // Top-level elements don't overlap the grown container.
+        const k = box('m.k');
+        expect(k.l >= b.r || k.r <= b.l || k.t >= b.b || k.b <= b.t).toBe(true);
     });
 
     it('draws an svg or image instead of a shape when no shape is given', async () => {

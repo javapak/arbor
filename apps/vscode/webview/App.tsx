@@ -4,6 +4,7 @@ import { DiagramProvider, NodePalette } from 'webgpu-flow';
 import { useDiagramStore } from './store';
 import { handleEdit } from './diagramEdits';
 import DiagramPane from './DiagramPane';
+import Toolbar from './Toolbar';
 
 export default function App() {
     const { kind, errors, notice, setNotice, ir } = useDiagramStore();
@@ -22,6 +23,7 @@ export default function App() {
                 <Allotment.Pane minSize={320}>
                     <div style={{ position: 'relative', height: '100%' }}>
                         <DiagramPane />
+                        <Toolbar />
                         {errors > 0 && (
                             <Badge color="red" variant="light" style={{ position: 'absolute', top: 12, left: 12 }}>
                                 {errors} error{errors > 1 ? 's' : ''} in the text

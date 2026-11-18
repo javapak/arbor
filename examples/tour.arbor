@@ -1,0 +1,28 @@
+// A small model for the screenshots in the user guide.
+model tour {
+
+    Primitive UUID { builtin: uuid }
+    Primitive Text { builtin: text }
+
+    Entity Customer @"customer" {
+        tableName: "customers"
+        description: "Someone who buys"
+
+        Column id    { type: -> UUID  unique: true }
+        Column email { type: -> Text  unique: true }
+    }
+
+    Package billing {
+        Entity Invoice @"invoice" { tableName: "invoices" }
+        Entity Payment @"payment" { tableName: "payments" }
+    }
+
+    Component Checkout {
+        requires: [-> Payments]
+        Interface Orders {}
+    }
+
+    Interface Payments {
+        Operation charge { style: async  returns: -> billing.Invoice }
+    }
+}

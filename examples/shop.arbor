@@ -49,4 +49,5 @@ model shop {
 
        
     }
+    Package Package1 {}
 }

@@ -65,7 +65,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         const webview = panel.webview;
         const media = vscode.Uri.joinPath(this.context.extensionUri, 'media');
         webview.options = { enableScripts: true, localResourceRoots: [media] };
-        webview.html = webviewPage(webview, media, 'webview', 'Arbor Diagram');
+        webview.html = webviewPage(webview, media, 'webview', 'Arbor Diagram', { 'elk-worker': 'elk-worker.min.js' });
 
         const view = await ViewStore.open(document.uri);
         const uri = this.client.code2ProtocolConverter.asUri(document.uri);
