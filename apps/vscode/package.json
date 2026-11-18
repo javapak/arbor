@@ -7,7 +7,7 @@
   "publisher": "arbor",
   "license": "UNLICENSED",
   "engines": {
-    "vscode": "^1.95.0"
+    "vscode": "^1.106.0"
   },
   "categories": [
     "Programming Languages",
@@ -89,6 +89,12 @@
         "title": "Refresh",
         "category": "Arbor",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "arbor.showProperties",
+        "title": "Show Properties",
+        "category": "Arbor",
+        "icon": "$(symbol-property)"
       }
     ],
     "menus": {
@@ -100,6 +106,11 @@
         },
         {
           "command": "arbor.openText",
+          "when": "activeCustomEditorId == arbor.diagram",
+          "group": "navigation"
+        },
+        {
+          "command": "arbor.showProperties",
           "when": "activeCustomEditorId == arbor.diagram",
           "group": "navigation"
         }
@@ -185,6 +196,13 @@
           "title": "Arbor",
           "icon": "resources/arbor.svg"
         }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "arbor-properties",
+          "title": "Arbor Properties",
+          "icon": "resources/arbor.svg"
+        }
       ]
     },
     "views": {
@@ -202,6 +220,14 @@
         {
           "id": "arbor.models",
           "name": "Models",
+          "contextualTitle": "Arbor"
+        }
+      ],
+      "arbor-properties": [
+        {
+          "type": "webview",
+          "id": "arbor.properties",
+          "name": "Properties",
           "contextualTitle": "Arbor"
         }
       ]

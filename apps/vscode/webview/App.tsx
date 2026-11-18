@@ -4,7 +4,7 @@ import { DiagramProvider, NodePalette } from 'webgpu-flow';
 import { useDiagramStore } from './store';
 import { handleEdit } from './diagramEdits';
 import DiagramPane from './DiagramPane';
-import PropertiesPanel from './PropertiesPanel';
+import Toolbar from './Toolbar';
 
 export default function App() {
     const { kind, errors, notice, setNotice, ir } = useDiagramStore();
@@ -23,6 +23,7 @@ export default function App() {
                 <Allotment.Pane minSize={320}>
                     <div style={{ position: 'relative', height: '100%' }}>
                         <DiagramPane />
+                        <Toolbar />
                         {errors > 0 && (
                             <Badge color="red" variant="light" style={{ position: 'absolute', top: 12, left: 12 }}>
                                 {errors} error{errors > 1 ? 's' : ''} in the text
@@ -39,20 +40,14 @@ export default function App() {
                         )}
                     </div>
                 </Allotment.Pane>
-                <Allotment.Pane minSize={220} preferredSize={300}>
-                    <Allotment vertical>
-                        <Allotment.Pane minSize={120}>
-                            <div style={{ height: '100%', overflowY: 'auto' }}><PropertiesPanel /></div>
-                        </Allotment.Pane>
-                        <Allotment.Pane minSize={120} preferredSize="40%">
-                            <div style={{ height: '100%', overflowY: 'auto' }}>
-                                <NodePalette />
-                                <Text size="xs" c="dimmed" p="sm">
-                                    Adding or deleting a node edits the text. Moving and resizing go to the view file.
-                                </Text>
-                            </div>
-                        </Allotment.Pane>
-                    </Allotment>
+                {/* The palette stays here: dragging from it onto the canvas can't cross webviews. */}
+                <Allotment.Pane minSize={180} preferredSize={240}>
+                    <div style={{ height: '100%', overflowY: 'auto' }}>
+                        <NodePalette />
+                        <Text size="xs" c="dimmed" p="sm">
+                            Adding or deleting a node edits the text. Moving and resizing go to the view file.
+                        </Text>
+                    </div>
                 </Allotment.Pane>
             </Allotment>
         </DiagramProvider>

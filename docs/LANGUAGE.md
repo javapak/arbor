@@ -38,7 +38,8 @@ profile persistence version "0.1.0" {
   - `shape`: `rectangle`, `roundedRectangle`, `circle`, `oval`, `diamond`, `hexagon`, `package`, `actor`, `initialNode`, `finalNode`, `none`. Unknown shapes draw as `rectangle`.
   - `svg`: inline SVG markup (use single quotes inside it). `image`: an image URL. Without a `shape` the SVG or image *is* the node; with one, it is drawn on the shape. `tint: true` colors an SVG with the node `color`.
   - `icon`: an emoji drawn on the node.
-  - `color`, `labelColor`, `iconColor` (hex), `label` (`{name}`, `{kind}`), `width`, `height`, `container`.
+  - `color`, `labelColor`, `iconColor` (hex), `label` (`{name}`, `{kind}`), `width`, `height`.
+  - `container: true`: the diagram draws the elements this kind contains inside it, as rows (or nested boxes), instead of as composition edges. See [VSCODE.md](VSCODE.md#how-elements-are-drawn).
 
 ## Models
 

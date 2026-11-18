@@ -38,4 +38,16 @@ model shop {
     Interface Payments {
         Operation charge { style: async  returns: -> Money }
     }
+    Package internal {
+        Entity Payment @"payment" {
+            tableName: "payments"
+
+            Column id     { type: -> UUID }
+            Column order  { type: -> Order  onDelete: cascade }
+            Column amount { type: -> Money }
+        }
+
+       
+    }
+    Package Package1 {}
 }

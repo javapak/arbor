@@ -20,6 +20,10 @@ export default function DiagramPane() {
     const container = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 0, height: 0 });
     const fitPending = useRef(true);
+    // The properties view shows the selected element. A redraw clears the selection until the
+    // element is reselected; report the pending one meanwhile, so the form isn't torn down mid-typing.
+    const reported = selected.current ?? pendingSelect;
+    useEffect(() => post({ type: 'selection', id: reported }), [reported]);
 
     useEffect(() => {
         if (!ir) return;
@@ -29,8 +33,9 @@ export default function DiagramPane() {
         const has = (id: string | null) => !!id && graph.nodes.some(n => n.id === id);
         // A pending element not drawn yet (just added, its text edit still on the way) stays pending.
         if (!has(pendingSelect) && has(selected.current)) setPendingSelect(selected.current);
-        // Pin auto-placed nodes, so adding an element doesn't reshuffle the others.
-        const placed = graph.nodes.filter(n => !layout[n.id]);
+        // Pin auto-placed nodes, so adding an element doesn't reshuffle the others. Nodes inside a
+        // container are arranged by it and have no place of their own.
+        const placed = graph.nodes.filter(n => !layout[n.id] && !n.parentId);
         if (placed.length) {
             const entries = Object.fromEntries(placed.map(n => [n.id, { ...n.data.position }]));
             setLayout(l => ({ ...l, ...entries }));
