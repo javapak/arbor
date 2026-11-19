@@ -8,7 +8,10 @@ const noop = () => {};
 
 /** The canvas, redrawn whenever the model or the view file changes. */
 export default function DiagramPane() {
-    const { loadDiagram, fitToContent, selectNode, nodes, interaction } = useDiagram();
+    const { loadDiagram, fitToContent, selectNode, nodes, interaction, gridSnapping } = useDiagram();
+    // Auto-placed elements go on the snap grid; read at redraw time, so toggling snapping doesn't redraw.
+    const grid = useRef<number | undefined>(undefined);
+    grid.current = gridSnapping.enabled ? gridSnapping.gridSize : undefined;
     const selected = useRef<string | null>(null);
     // A node, or an edge that is an element itself (of an edge kind, like a generalization).
     const edge = interaction.selectedEdges.length === 1 && interaction.selectedNodes.length === 0 ? interaction.selectedEdges[0] : undefined;
@@ -31,7 +34,7 @@ export default function DiagramPane() {
     useEffect(() => {
         if (!ir) return;
         const { layout, edgeLayout, setLayout, pendingSelect, setPendingSelect } = useDiagramStore.getState();
-        const graph = toFlowGraph(ir, { layout, edgeLayout });
+        const graph = toFlowGraph(ir, { layout, edgeLayout, grid: grid.current });
         // Redraws clear the selection; keep the selected element (and its properties panel) across them.
         const has = (id: string | null) => !!id && graph.nodes.some(n => n.id === id);
         // A pending element not drawn yet (just added, its text edit still on the way) stays pending.

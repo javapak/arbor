@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActionIcon, Group, Menu, Tooltip } from '@mantine/core';
-import { ConnectorRegular, FlowchartRegular, ZoomFitRegular } from '@fluentui/react-icons';
-import { InteractionMode, useDiagram, type LayoutOptions } from 'webgpu-flow';
+import { ConnectorRegular, FlowchartRegular, SettingsRegular, ZoomFitRegular } from '@fluentui/react-icons';
+import { InteractionMode, RenderSettingsModal, useDiagram, type LayoutOptions } from 'webgpu-flow';
 import type { LayoutEntry } from '@arbor/adapter-flow';
 import { useDiagramStore } from './store';
 import { post } from './vscode';
@@ -22,6 +22,7 @@ export default function Toolbar() {
     const layoutReady = useDiagramStore(s => s.layoutReady);
     const [running, setRunning] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     const layout = async (options: Partial<LayoutOptions>) => {
         setRunning(true);
@@ -75,6 +76,12 @@ export default function Toolbar() {
                     {LAYOUTS.map(l => <Menu.Item key={l.label} onClick={() => void layout(l.options)}>{l.label}</Menu.Item>)}
                 </Menu.Dropdown>
             </Menu>
+            <Tooltip label="Render settings: resolution and anti-aliasing">
+                <ActionIcon variant="default" aria-label="Render settings" onClick={() => setSettingsOpen(true)}>
+                    <SettingsRegular />
+                </ActionIcon>
+            </Tooltip>
+            <RenderSettingsModal opened={settingsOpen} onClose={() => setSettingsOpen(false)} />
         </Group>
     );
 }

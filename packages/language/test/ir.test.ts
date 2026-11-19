@@ -88,6 +88,18 @@ describe('IR -> flow graph', () => {
         expect(g.nodes.find(n => n.id === 'user.email')!.data.parentId).toBe('user');
     });
 
+    it('places elements without a position with their top-left corner on the snap grid', async () => {
+        const g = toFlowGraph(await shopIR(), { grid: 50, layout: { user: { x: 13, y: 7 } } });
+        const top = g.nodes.filter(n => !n.parentId);
+        expect(top.length).toBeGreaterThan(3);
+        for (const n of top) {
+            if (n.id === 'user') continue;   // positioned by the layout: left where it is
+            const { x, y } = n.data.position, { width, height } = n.data.size;
+            expect([(x - width / 2) % 50, (y - height / 2) % 50].map(v => Math.abs(v))).toEqual([0, 0]);
+        }
+        expect(g.nodes.find(n => n.id === 'user')!.data.position).toEqual({ x: 13, y: 7 });
+    });
+
     it('maps references to arrow edges and containment to composition edges', async () => {
         const r = await loadWorkspace([
             { uri: 'p.arbor', text: `profile p {

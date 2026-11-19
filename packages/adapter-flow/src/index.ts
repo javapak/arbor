@@ -156,6 +156,8 @@ export interface FlowOptions {
     contentSize?: number;
     /** Offer every non-abstract kind of the document's profiles in the editor's palette (default true). */
     palette?: boolean;
+    /** The editor's snap grid: elements placed automatically get their top-left corner on it. */
+    grid?: number;
 }
 
 const REFERENCE_STYLE: FlowEdge['style'] = { color: [0.39, 0.45, 0.55, 1], thickness: 2, targetMarker: 'open-arrow' };
@@ -178,7 +180,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
     const drawn = (id: string) => !asEdges.edges.has(id) && !asEdges.hidden.has(id);
     const nestedIn = containerOf(index);
     const compartments = new Map(doc.models.flatMap(m => m.elements).map(el => [el.id, propertyLines(el, index)]));
-    const boxes = placeElements(doc, layout, index, defaultSize, nestedIn, compartments, drawn);
+    const boxes = placeElements(doc, layout, index, defaultSize, nestedIn, compartments, drawn, opts.grid);
     for (const model of doc.models) {
         for (const el of model.elements) {
             const v = index.elementVisual(el);
@@ -440,7 +442,8 @@ function containerOf(index: IRIndex): (el: IRElement) => string | undefined {
  */
 function placeElements(
     doc: IRDocument, layout: Layout, index: IRIndex, size: Size,
-    nestedIn: (el: IRElement) => string | undefined, compartments: Map<string, string[]>, drawn: (id: string) => boolean
+    nestedIn: (el: IRElement) => string | undefined, compartments: Map<string, string[]>, drawn: (id: string) => boolean,
+    grid?: number
 ): Map<string, Box> & { isRow(el: IRElement): boolean } {
     const elements = doc.models.flatMap(m => m.elements).filter(el => drawn(el.id));
     const children = new Map<string, IRElement[]>();
@@ -484,7 +487,7 @@ function placeElements(
         for (const c of children.get(el.id) ?? []) put(c, at);
     };
     const topLevel = elements.filter(el => !nestedIn(el));
-    const place = gridPlacer(topLevel, layout, el => sizes.get(el.id)!, size);
+    const place = gridPlacer(topLevel, layout, el => sizes.get(el.id)!, size, grid);
     for (const el of topLevel) put(el, layout[el.id] ?? place(el));
     return boxes;
 }
@@ -526,12 +529,14 @@ function columnsExtent(items: Size[]): Size {
 
 /**
  * Places top-level elements the layout doesn't position on a grid, in model
- * order, skipping cells that overlap elements it does position.
+ * order, skipping cells that overlap elements it does position. With a snap
+ * grid, each one's top-left corner is on it, as a drag would leave it.
  */
 function gridPlacer(
     elements: IRElement[], layout: Layout, sizeOf: (el: IRElement) => { width: number; height: number },
-    size: { width: number; height: number }
+    size: { width: number; height: number }, grid?: number
 ) {
+    const snap = (centre: number, extent: number) => (grid ? Math.round((centre - extent / 2) / grid) * grid + extent / 2 : centre);
     const cols = 6, gap = 40;
     // Nodes are positioned by their centre (as the renderer does), so keep rectangles centred too.
     const taken = elements.flatMap(el => {
@@ -544,7 +549,7 @@ function gridPlacer(
     return (el: IRElement): { x: number; y: number } => {
         const { width, height } = sizeOf(el);
         for (;; cell++) {
-            const x = (cell % cols) * (size.width + gap), y = Math.floor(cell / cols) * (size.height + gap);
+            const x = snap((cell % cols) * (size.width + gap), width), y = snap(Math.floor(cell / cols) * (size.height + gap), height);
             if (free(x, y, width, height)) {
                 taken.push({ x, y, width, height });
                 cell++;

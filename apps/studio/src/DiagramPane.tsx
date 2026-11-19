@@ -9,7 +9,10 @@ const noop = () => {};
 
 /** The canvas, redrawn from the text whenever it changes. */
 export default function DiagramPane() {
-  const { loadDiagram, fitToContent, selectNode, nodes } = useDiagram();
+  const { loadDiagram, fitToContent, selectNode, nodes, gridSnapping } = useDiagram();
+  // Auto-placed elements go on the snap grid; read at redraw time, so toggling snapping doesn't redraw.
+  const grid = useRef<number | undefined>(undefined);
+  grid.current = gridSnapping.enabled ? gridSnapping.gridSize : undefined;
   const files = useStudio(s => s.files);
   const resyncRequest = useStudio(s => s.resyncRequest);
   const resolution = useRenderSettings(s => s.resolution);
@@ -23,7 +26,7 @@ export default function DiagramPane() {
       const result = await loadWorkspace(sources(files));
       if (cancelled) return;
       const { layout, edgeLayout, setLayout, setDiagnostics } = useStudio.getState();
-      const graph = toFlowGraph(result.ir, { layout, edgeLayout });
+      const graph = toFlowGraph(result.ir, { layout, edgeLayout, grid: grid.current });
       // Pin auto-placed nodes, so adding an element doesn't reshuffle the others. Nodes inside a
       // container are arranged by it and have no place of their own.
       const placed = graph.nodes.filter(n => !layout[n.id] && !n.parentId);
