@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { MantineProvider } from '@mantine/core';
 import type { IRDocument } from '@arbor/ir';
 import '@mantine/core/styles.css';
+import './vscode-theme.css';
 import './properties.css';
 import type { PropertiesHostMessage } from '../src/protocol';
 import { post } from './vscode';

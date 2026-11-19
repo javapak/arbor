@@ -1,0 +1,77 @@
+{
+  "format": "arbor/view",
+  "version": 1,
+  "model": "library.arbor",
+  "nodes": {
+    "library.Book": {
+      "x": -200,
+      "y": -250
+    },
+    "library.Date": {
+      "x": -570,
+      "y": 390
+    },
+    "library.Disc": {
+      "x": 50,
+      "y": -250
+    },
+    "library.Item": {
+      "x": -500,
+      "y": 25
+    },
+    "library.Lendable": {
+      "x": -500,
+      "y": 250
+    },
+    "library.Library": {
+      "x": 350,
+      "y": -250
+    },
+    "library.Member": {
+      "x": -500,
+      "y": -250
+    },
+    "library.String": {
+      "x": 580,
+      "y": -360
+    }
+  },
+  "edges": {
+    "library.Book.Generalization#1": [
+      {
+        "x": -200,
+        "y": 25
+      }
+    ],
+    "library.Disc.Generalization#1": [
+      {
+        "x": 50,
+        "y": -64
+      },
+      {
+        "x": -500,
+        "y": -64
+      }
+    ],
+    "library.borrows": [
+      {
+        "x": -664,
+        "y": -250
+      },
+      {
+        "x": -664,
+        "y": 200
+      }
+    ],
+    "library.holdings": [
+      {
+        "x": 350,
+        "y": -100
+      },
+      {
+        "x": 350,
+        "y": 50
+      }
+    ]
+  }
+}

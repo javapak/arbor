@@ -1,0 +1,36 @@
+{
+  "format": "arbor/view",
+  "version": 1,
+  "model": "tour.arbor",
+  "nodes": {
+    "customer": {
+      "x": 584,
+      "y": 21
+    },
+    "tour.Checkout": {
+      "x": -2,
+      "y": 135
+    },
+    "tour.Payments": {
+      "x": 180,
+      "y": 140
+    },
+    "tour.Payments.charge": {
+      "x": 380,
+      "y": 131
+    },
+    "tour.Text": {
+      "x": 180,
+      "y": -19
+    },
+    "tour.UUID": {
+      "x": -20,
+      "y": -19
+    },
+    "tour.billing": {
+      "x": 998,
+      "y": 0
+    }
+  },
+  "edges": {}
+}

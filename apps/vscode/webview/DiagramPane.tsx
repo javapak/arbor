@@ -20,7 +20,6 @@ export default function DiagramPane() {
     const ir = useDiagramStore(s => s.ir);
     const viewRevision = useDiagramStore(s => s.viewRevision);
     const resyncRequest = useDiagramStore(s => s.resyncRequest);
-    const dark = useDiagramStore(s => s.dark);
     const pendingSelect = useDiagramStore(s => s.pendingSelect);
     const resolution = useRenderSettings(s => s.resolution);
     const container = useRef<HTMLDivElement>(null);
@@ -77,7 +76,7 @@ export default function DiagramPane() {
     return (
         // Focusable, and focused on press, so keyboard shortcuts go to the diagram.
         <div ref={container} tabIndex={-1} onPointerDown={() => container.current?.focus({ preventScroll: true })}
-            style={{ width: '100%', height: '100%', overflow: 'hidden', background: dark ? '#1f1f1f' : '#f5f5f5', outline: 'none' }}>
+            style={{ width: '100%', height: '100%', overflow: 'hidden', background: 'var(--vscode-editor-background)', outline: 'none' }}>
             {size.width > 0 && (
                 <DiagramCanvas width={size.width} height={size.height} resolution={resolution} setSupportedSampleCount={noop} />
             )}

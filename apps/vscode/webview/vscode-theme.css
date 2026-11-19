@@ -1,0 +1,76 @@
+/*
+ * The webviews in VS Code's colours: Mantine's surfaces and controls, the node palette
+ * and the split view all take the active colour theme's --vscode-* variables, so they
+ * look like part of the editor and change with the theme. (The canvas takes the theme
+ * in vscodeTheme.ts.) Imported after Mantine's styles, so these win.
+ */
+:root[data-mantine-color-scheme] {
+    --mantine-font-family: var(--vscode-font-family);
+    --mantine-color-body: var(--vscode-editor-background);
+    --mantine-color-text: var(--vscode-foreground);
+    --mantine-color-dimmed: var(--vscode-descriptionForeground);
+    --mantine-color-placeholder: var(--vscode-input-placeholderForeground);
+    --mantine-color-anchor: var(--vscode-textLink-foreground);
+
+    /* `default` buttons and borders (toolbar icons, palette tiles) as VS Code's secondary buttons. */
+    --mantine-color-default: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
+    --mantine-color-default-hover: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+    --mantine-color-default-color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    --mantine-color-default-border: var(--vscode-widget-border, var(--vscode-panel-border, transparent));
+
+    /* Filled controls (an active toggle, a checked box) as VS Code's primary buttons. */
+    --mantine-primary-color-filled: var(--vscode-button-background);
+    --mantine-primary-color-filled-hover: var(--vscode-button-hoverBackground);
+    --mantine-primary-color-contrast: var(--vscode-button-foreground);
+
+    --tooltip-bg: var(--vscode-editorHoverWidget-background);
+    --tooltip-color: var(--vscode-editorHoverWidget-foreground);
+
+    /* The node palette (webgpu-flow's NodePalette). */
+    --wf-palette-border: var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+    --wf-palette-item-bg: var(--vscode-editorWidget-background);
+    --wf-palette-item-border: var(--vscode-widget-border, var(--vscode-panel-border, transparent));
+    --wf-palette-item-color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+
+    /* The split between canvas and palette (allotment). */
+    --separator-border: var(--vscode-editorGroup-border, var(--vscode-panel-border, transparent));
+    --focus-border: var(--vscode-focusBorder);
+}
+
+.mantine-Input-input {
+    --input-bg: var(--vscode-input-background);
+    --input-color: var(--vscode-input-foreground);
+    --input-bd: var(--vscode-input-border, var(--mantine-color-default-border));
+    --input-bd-focus: var(--vscode-focusBorder);
+}
+
+.mantine-Menu-dropdown,
+.mantine-Popover-dropdown {
+    background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+    color: var(--vscode-menu-foreground, var(--vscode-foreground));
+    border-color: var(--vscode-menu-border, var(--mantine-color-default-border));
+}
+
+.mantine-Menu-item {
+    color: inherit;
+}
+
+.mantine-Menu-item:hover,
+.mantine-Menu-item[data-hovered] {
+    background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+    color: var(--vscode-menu-selectionForeground, inherit);
+}
+
+.mantine-Tooltip-tooltip {
+    border: 1px solid var(--vscode-editorHoverWidget-border, transparent);
+}
+
+.mantine-Modal-content,
+.mantine-Modal-header {
+    background: var(--vscode-editorWidget-background);
+    color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+}
+
+.mantine-Modal-content {
+    border: 1px solid var(--vscode-widget-border, transparent);
+}
