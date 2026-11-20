@@ -7,6 +7,7 @@ import { handleEdit } from './diagramEdits';
 import Editor from './Editor';
 import DiagramPane from './DiagramPane';
 import DiagramTrail from './DiagramTrail';
+import DiagramTitle from './DiagramTitle';
 import Toolbar from './Toolbar';
 
 export default function Studio() {
@@ -75,6 +76,7 @@ export default function Studio() {
             <Allotment.Pane minSize={320}>
               <div style={{ position: 'relative', height: '100%' }}>
                 <DiagramPane />
+                <DiagramTitle ir={ir} root={root} />
                 <Toolbar />
                 <div style={{ position: 'absolute', top: 12, left: 12 }}>
                   <DiagramTrail ir={ir} root={root} open={setRoot} />

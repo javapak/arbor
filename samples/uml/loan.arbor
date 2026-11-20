@@ -1,0 +1,43 @@
+// A loan's life as a UML state machine (see uml.arbor), owned by the Loan class
+// as its behavior. Loan's attributes are typed by the library model's classes.
+model lending {
+
+    Class Loan {
+        Property item   { type: -> library.Item }
+        Property member { type: -> library.Member }
+        Operation chargeFine {}
+        classifierBehavior: -> Lifecycle
+
+        // A StateMachine is a Behavior and a Classifier, so it fits both
+        // ownedBehavior and nestedClassifier: name the one that holds it.
+        ownedBehavior += StateMachine Lifecycle {
+            Region main {
+                Pseudostate start {}
+                // A composite state: its own region, with states of its own.
+                State Active {
+                    entry: "notifyMember()"
+                    Region terms {
+                        Pseudostate begin {}
+                        State Lent {}
+                        State Renewed { entry: "extendDueDate()" }
+                        Transition { source: -> begin  target: -> Lent }
+                        Transition { source: -> Lent   target: -> Renewed  trigger: "renew"  guard: "renewals < 3" }
+                    }
+                }
+                State Overdue  { entry: "sendReminder()"  doActivity: "accrueFine()" }
+                State Lost     { entry: "chargeReplacement()" }
+                FinalState closed {}
+
+                Transition { source: -> start    target: -> Active }
+                Transition { source: -> Active   target: -> closed   trigger: "returned" }
+                Transition { source: -> Active   target: -> Overdue  trigger: "after(14 days)" }
+                Pseudostate assess { kind: choice }
+                Transition { source: -> Overdue  target: -> assess   trigger: "returned" }
+                Transition { source: -> assess   target: -> closed   guard: "fine == 0" }
+                Transition { source: -> assess   target: -> closed   guard: "fine > 0"  effect: "chargeFine()" }
+                Transition { source: -> Overdue  target: -> Lost     trigger: "after(90 days)" }
+                Transition { source: -> Lost     target: -> closed   trigger: "paid"  guard: "amount >= replacementCost" }
+            }
+        }
+    }
+}

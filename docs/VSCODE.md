@@ -108,8 +108,9 @@ crossing never looks like a junction. Edges leaving a container are drawn over
 it.
 
 **Opening.** An element whose kind has a diagram of its own (`diagram: true`, like a UML
-state machine) is drawn as one node. Double-click it to open its diagram: the element
-framing what it contains, and nothing else. A bar at the top left shows where you are, as
+state machine) is drawn as one node. Double-click it to open its diagram: what the element
+contains and nothing else, with the element's name as the title at the top. A bar at the
+top left shows where you are, as
 `model › Lifecycle`; its back button, or any name in it, goes back. Revealing an element
 from a tree view opens the diagram it's in.
 

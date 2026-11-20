@@ -1,4 +1,4 @@
-import { diagramOf, diagramPath, toFlowGraph } from '@arbor/adapter-flow';
+import { diagramOf, diagramPath, diagramTitle, toFlowGraph } from '@arbor/adapter-flow';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -131,27 +131,33 @@ describe('profile validation', () => {
         expect(outer.edges.find(e => e.targetNodeId === sm)?.data).toMatchObject({ relation: 'containment', label: 'ownedBehavior' });
         expect(outer.nodes.some(n => n.id.startsWith(`${sm}.`))).toBe(false);
         expect(outer.edges.some(e => e.id.startsWith(`${sm}.`))).toBe(false);
-        expect([diagramOf(r.ir, `${terms}.Lent`), diagramOf(r.ir, sm), diagramPath(r.ir, sm).map(e => e.id)]).toEqual([sm, null, [sm]]);
+        const active = `${main}.Active`;
+        expect([diagramOf(r.ir, `${terms}.Lent`), diagramOf(r.ir, `${main}.Overdue`), diagramOf(r.ir, sm)]).toEqual([active, sm, null]);
+        expect(diagramPath(r.ir, active).map(e => e.id)).toEqual([sm, active]);
 
-        // Its own diagram: the machine as a free frame, its region, the region's states and a composite
-        // state's own region drawn inside one another, where they're placed, not as rows. Nothing else.
+        // Its own diagram: what it holds, without it (its name is the title), and without its one region,
+        // whose states take its place. The composite state Active is one node too, opening its own.
         const g = toFlowGraph(r.ir, { root: sm });
         const node = (id: string) => g.nodes.find(n => n.id === id)!;
-        expect(g.nodes.every(n => n.id === sm || n.id.startsWith(`${sm}.`))).toBe(true);
-        expect(node(sm).parentId).toBeUndefined();
-        expect(node(sm).visual).toMatchObject({ container: true, layout: 'free' });
+        expect(diagramTitle(r.ir, sm)).toBe('«stateMachine» Lifecycle');
+        expect(g.nodes.map(n => n.id.slice(main.length + 1))).toEqual(['start', 'Active', 'Overdue', 'Lost', 'closed', 'assess']);
+        expect(g.nodes.every(n => n.parentId === undefined)).toBe(true);
         expect(g.edges.some(e => e.data.relation === 'containment')).toBe(false);
-        expect([node(main).parentId, node(`${main}.Active`).parentId, node(terms).parentId, node(`${terms}.Lent`).parentId])
-            .toEqual([sm, main, `${main}.Active`, terms]);
+        expect(node(active)).toMatchObject({ data: { opens: true }, visual: { container: false, compartment: ['entry = "notifyMember()"'] } });
+        expect(node(`${main}.Overdue`).data.opens).toBeUndefined();   // a simple state: nothing to open
         expect(node(`${main}.Overdue`).visual.presentation).toBeUndefined();
         expect(node(`${main}.Overdue`).data.size).toEqual({ width: 230.5, height: 86 });   // header, then its compartment, as the renderer sizes it
-        const labels = (region: string) => g.edges.filter(e => e.id.startsWith(`${region}.Transition#`)).map(e => e.data.label);
+        const labels = (region: string, root = sm) => toFlowGraph(r.ir, { root }).edges.filter(e => e.id.startsWith(`${region}.Transition#`)).map(e => e.data.label);
         expect(labels(main)).toEqual(['', 'returned', 'after(14 days)', 'returned', '[fine == 0]', '[fine > 0] / chargeFine()',
             'after(90 days)', 'paid [amount >= replacementCost]']);
         // Pseudostates are drawn by their kind: the initial one by default, a choice as a diamond.
         expect(node(`${main}.start`).visual).toMatchObject({ shape: 'initialNode', size: { width: 24, height: 24 } });
         expect(node(`${main}.assess`).visual).toMatchObject({ shape: 'diamond', size: { width: 32, height: 32 } });
-        expect(labels(terms)).toEqual(['', 'renew [renewals < 3]']);
+
+        // The composite state's diagram: its states, titled with its name.
+        expect(toFlowGraph(r.ir, { root: active }).nodes.map(n => n.id.slice(terms.length + 1))).toEqual(['begin', 'Lent', 'Renewed']);
+        expect(labels(terms, active)).toEqual(['', 'renew [renewals < 3]']);
+        expect(diagramTitle(r.ir, active)).toBe('Active');
     });
 
     it('bad multiplicity', async () => {

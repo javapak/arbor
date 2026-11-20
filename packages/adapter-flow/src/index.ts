@@ -163,8 +163,9 @@ export interface FlowOptions {
     /** The editor's snap grid: elements placed automatically get their top-left corner on it. */
     grid?: number;
     /**
-     * Draw this element's own diagram (its kind sets `diagram: true`): the element as a frame
-     * holding what it contains. Without it, the model's diagram, where such elements are one node each.
+     * Draw this element's own diagram (its kind sets `diagram: true`): what it contains, at the
+     * top level, without the element itself (hosts show its name as the diagram's title, see
+     * `diagramTitle`). Without it, the model's diagram, where such elements are one node each.
      * See `diagramOf` and `diagramPath`.
      */
     root?: string;
@@ -188,11 +189,18 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
 
     const asEdges = edgeElements(doc, index);
     const view = diagramView(index, opts.root);
-    const drawn = (id: string) => view.has(id) && !asEdges.edges.has(id) && !asEdges.hidden.has(id);
-    const nestedIn = (el: IRElement) => (el.id === opts.root ? undefined : containerOf(index)(el));
+    const alone = hiddenWhenAlone(index);
+    const drawn = (id: string) => view.has(id) && !alone.has(id) && !asEdges.edges.has(id) && !asEdges.hidden.has(id);
+    // The owner an element is drawn in: past any hidden when alone, whose contents take their place.
+    const ownerOf = (el: IRElement): string | null => {
+        let p = el.parent;
+        while (p && alone.has(p)) p = index.elements.get(p)?.parent ?? null;
+        return p;
+    };
+    // In an element's own diagram, what it holds directly is at the top level.
+    const nestedIn = (el: IRElement) => (opts.root && ownerOf(el) === opts.root ? undefined : containerOf(index, ownerOf)(el));
     const compartments = new Map(doc.models.flatMap(m => m.elements).map(el => [el.id, propertyLines(el, index)]));
-    const boxes = placeElements(doc, frameLayout(layout, index, opts.root, drawn), index, defaultSize, nestedIn, compartments, drawn,
-        view.collapsed, opts.grid);
+    const boxes = placeElements(doc, layout, index, defaultSize, nestedIn, compartments, drawn, view.collapsed, opts.grid);
     for (const model of doc.models) {
         for (const el of model.elements) {
             const v = index.elementVisual(el);
@@ -249,7 +257,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                     edge(`${el.id}--${feature}->${t}`, el.id, t, 'reference', edgeStyle(edgeVisual(f), REFERENCE_STYLE), featureLabels(feature, f));
                 }
             }
-            if (mode === 'edges' && el.parent && !owner && drawn(el.parent) && el.id !== opts.root) {
+            if (mode === 'edges' && el.parent && !owner && drawn(el.parent)) {
                 const feature = el.containedIn ?? 'contains';
                 const parent = index.elements.get(el.parent);
                 const contains = parent && index.features(parent.kind).find(c => c.name === feature);
@@ -439,9 +447,9 @@ type Size = { width: number; height: number };
 
 // ------------------------------------------------------------ diagrams of their own
 
-/** Whether elements of the element's kind have diagrams of their own (`diagram: true`). */
+/** Whether the element has a diagram of its own: its kind says so (`diagram: true`), and it contains something. */
 function opensDiagram(index: IRIndex, el: IRElement): boolean {
-    return index.visual(el.kind).diagram === true;
+    return index.visual(el.kind).diagram === true && el.children.length > 0;
 }
 
 /**
@@ -476,43 +484,55 @@ export function diagramPath(doc: IRDocument, root: string | null | undefined): I
     return out;
 }
 
-/** What one diagram draws: `root` and what's in its diagram, or the model's diagram. */
+/** What one diagram draws: what's in `root`'s diagram (not `root` itself), or the model's. */
 function diagramView(index: IRIndex, root: string | undefined): { has(id: string): boolean; collapsed(el: IRElement): boolean } {
     const ids = new Set<string>();
     for (const el of index.elements.values()) {
-        if (el.id === root || diagramAround(index, el.id) === (root ?? null)) ids.add(el.id);
+        if (diagramAround(index, el.id) === (root ?? null)) ids.add(el.id);
     }
     return {
         has: id => ids.has(id),
-        collapsed: el => el.id !== root && opensDiagram(index, el),
+        collapsed: el => opensDiagram(index, el),
     };
 }
 
 /**
- * The layout for a diagram of its own: the frame isn't stored (its node in the
- * diagram around it is), so it goes where what it holds is, and grows to hold it.
+ * The elements not drawn because their kind sets `hideWhenAlone` and they're the
+ * only one in their owner's containment (a state machine's one region): what they
+ * contain is drawn in their place.
  */
-function frameLayout(layout: Layout, index: IRIndex, root: string | undefined, drawn: (id: string) => boolean): Layout {
-    if (!root) return layout;
-    const { [root]: _outer, ...rest } = layout;
-    void _outer;
-    const placed = Object.entries(rest).filter(([id]) => id !== root && drawn(id) && index.elements.has(id)).map(([, e]) => e);
-    if (!placed.length) return rest;
-    const xs = placed.map(e => e.x), ys = placed.map(e => e.y);
-    return { ...rest, [root]: { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 } };
+function hiddenWhenAlone(index: IRIndex): Set<string> {
+    const out = new Set<string>();
+    for (const el of index.elements.values()) {
+        if (index.visual(el.kind).hideWhenAlone !== true || !el.parent) continue;
+        const owner = index.elements.get(el.parent);
+        const siblings = (owner?.children ?? []).filter(c => index.elements.get(c)?.containedIn === el.containedIn);
+        if (siblings.length === 1) out.add(el.id);
+    }
+    return out;
+}
+
+/**
+ * The title of an element's own diagram: the element as its node in the
+ * diagram around it is labelled, with its stereotypes (`«stateMachine» Lifecycle`).
+ */
+export function diagramTitle(doc: IRDocument, root: string): string {
+    const index = new IRIndex(doc);
+    const el = index.elements.get(root);
+    if (!el) return '';
+    const v = index.elementVisual(el);
+    return [index.stereotypeLabel(el), labelFor(el, v.label, index)].filter(Boolean).join(' ');
 }
 
 /**
  * The nodes whose positions belong in the layout: top-level ones, and those in
  * a free container, which leaves them where they are. Other containers place
- * what's inside them, and a diagram's frame (`root`) is placed by what it holds.
- * Takes the renderer's nodes, or this adapter's.
+ * what's inside them. Takes the renderer's nodes, or this adapter's.
  */
-export function placedNodes<N extends { id: string; parentId?: string; visual?: object }>(nodes: readonly N[], root?: string | null): N[] {
+export function placedNodes<N extends { id: string; parentId?: string; visual?: object }>(nodes: readonly N[]): N[] {
     const byId = new Map(nodes.map(n => [n.id, n]));
     const free = (n: N | undefined) => (n?.visual as { layout?: unknown } | undefined)?.layout === 'free';
-    // A diagram's frame has its place in the diagram around it, not this one.
-    return nodes.filter(n => n.id !== root && (!n.parentId || free(byId.get(n.parentId))));
+    return nodes.filter(n => !n.parentId || free(byId.get(n.parentId)));
 }
 
 /** A container whose contents keep their own places, like nodes on the canvas (see webgpu-flow's utils/Nesting). */
@@ -546,9 +566,10 @@ function freeGrid(sizes: Size[]): { offsets: Array<{ x: number; y: number }>; ex
 }
 
 /** The owner an element is drawn inside: its owner, when the owner's kind is a container or the element's a member. */
-function containerOf(index: IRIndex): (el: IRElement) => string | undefined {
+function containerOf(index: IRIndex, ownerOf: (el: IRElement) => string | null = el => el.parent): (el: IRElement) => string | undefined {
     return el => {
-        const owner = el.parent ? index.elements.get(el.parent) : undefined;
+        const id = ownerOf(el);
+        const owner = id ? index.elements.get(id) : undefined;
         if (!owner) return undefined;
         return index.visual(owner.kind).container === true || index.visual(el.kind).member === true ? owner.id : undefined;
     };

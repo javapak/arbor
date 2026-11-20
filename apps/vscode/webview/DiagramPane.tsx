@@ -53,7 +53,7 @@ export default function DiagramPane() {
         if (!has(pendingSelect) && has(selected.current)) setPendingSelect(selected.current);
         // Pin auto-placed nodes, so adding an element doesn't reshuffle the others. Nodes inside a
         // container are arranged by it and have no place of their own, unless it's a free one.
-        const placed = placedNodes(graph.nodes, root).filter(n => !layout[n.id]);
+        const placed = placedNodes(graph.nodes).filter(n => !layout[n.id]);
         if (placed.length) {
             const entries = Object.fromEntries(placed.map(n => [n.id, { ...n.data.position }]));
             setLayout(l => ({ ...l, ...entries }));

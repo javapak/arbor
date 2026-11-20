@@ -102,8 +102,9 @@ profile uml version "0.1.0" {
 
     abstract kind Behavior extends Class {}
 
-    // State machines, regions and composite states are drawn as boxes holding
-    // what they contain where it's dragged (a free layout), joined by transitions.
+    // A state machine, and a composite state, is one node that opens a diagram of
+    // its own: its states, where they're dragged, joined by transitions. A region
+    // is drawn only beside others (orthogonal regions); a lone one is just its states.
     kind StateMachine extends Behavior {
         contains regions: Region [1..*]
         visual { shape: "roundedRectangle" color: "#a855f7" container: true layout: "free" diagram: true label: "«stateMachine» {name}" }
@@ -112,7 +113,7 @@ profile uml version "0.1.0" {
     kind Region extends NamedElement {
         contains subvertices: Vertex [0..*]
         contains transitions: Transition [0..*]
-        visual { shape: "rectangle" color: "#e9d5ff" container: true layout: "free" width: 120 height: 60 }
+        visual { shape: "rectangle" color: "#e9d5ff" container: true layout: "free" hideWhenAlone: true width: 120 height: 60 }
     }
 
     // Each vertex knows its transitions: whoever names it as source or target.
@@ -126,7 +127,7 @@ profile uml version "0.1.0" {
         prop exit:       string [0..1]
         prop doActivity: string [0..1]
         contains regions: Region [0..*]
-        visual { shape: "roundedRectangle" color: "#c084fc" container: true layout: "free" width: 140 height: 50 }
+        visual { shape: "roundedRectangle" color: "#c084fc" container: true layout: "free" diagram: true width: 140 height: 50 }
     }
 
     kind FinalState extends State {

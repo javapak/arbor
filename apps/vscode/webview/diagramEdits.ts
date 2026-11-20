@@ -10,8 +10,6 @@ import { post } from './vscode';
  */
 export function handleEdit(edit: DiagramEdit): void {
     const s = useDiagramStore.getState();
-    // A diagram's frame goes where what it holds is; its place is its node's in the diagram around it.
-    if ((edit.kind === 'node-moved' || edit.kind === 'node-resized') && edit.nodeId === s.root) return;
     switch (edit.kind) {
         case 'node-moved': {
             const entry = { ...s.layout[edit.nodeId], ...edit.to };

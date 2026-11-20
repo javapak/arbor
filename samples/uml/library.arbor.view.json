@@ -4,68 +4,37 @@
   "model": "library.arbor",
   "nodes": {
     "library.Book": {
-      "x": -350,
-      "y": -350
+      "x": 598,
+      "y": -15
     },
     "library.Date": {
-      "x": 530,
-      "y": -360
+      "x": 180,
+      "y": -10
     },
     "library.Disc": {
-      "x": -500,
-      "y": -150
+      "x": 798,
+      "y": -15
     },
     "library.Item": {
-      "x": -250,
-      "y": -75
+      "x": 398,
+      "y": 12
     },
     "library.Lendable": {
-      "x": 50,
-      "y": 50
+      "x": 1100,
+      "y": 0
     },
     "library.Library": {
-      "x": -450,
-      "y": 100
+      "x": -2,
+      "y": 135
     },
     "library.Member": {
-      "x": -250,
-      "y": 300
+      "x": 784,
+      "y": 136
     },
     "library.String": {
-      "x": 280,
-      "y": -360
+      "x": -20,
+      "y": -10
     }
   },
-  "edges": {
-    "library.Book.Generalization#1": [
-      {
-        "x": -200,
-        "y": -350
-      }
-    ],
-    "library.Disc.Generalization#1": [
-      {
-        "x": -500,
-        "y": -50
-      }
-    ],
-    "library.Item.InterfaceRealization#1": [
-      {
-        "x": 50,
-        "y": -100
-      }
-    ],
-    "library.borrows": [
-      {
-        "x": 50,
-        "y": 300
-      }
-    ],
-    "library.holdings": [
-      {
-        "x": -200,
-        "y": 100
-      }
-    ]
-  }
+  "edges": {}
 }

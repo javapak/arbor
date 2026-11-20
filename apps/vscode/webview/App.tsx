@@ -6,6 +6,7 @@ import { handleEdit } from './diagramEdits';
 import DiagramPane from './DiagramPane';
 import Toolbar from './Toolbar';
 import DiagramTrail from './DiagramTrail';
+import DiagramTitle from './DiagramTitle';
 
 export default function App() {
     const { kind, errors, notice, setNotice, ir, root, setRoot } = useDiagramStore();
@@ -24,6 +25,7 @@ export default function App() {
                 <Allotment.Pane minSize={320}>
                     <div style={{ position: 'relative', height: '100%' }}>
                         <DiagramPane />
+                        <DiagramTitle ir={ir} root={root} />
                         <Toolbar />
                         <Group gap={8} wrap="nowrap" style={{ position: 'absolute', top: 12, left: 12 }}>
                             <DiagramTrail ir={ir} root={root} open={setRoot} />

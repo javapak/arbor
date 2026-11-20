@@ -2,7 +2,7 @@ import { Validator } from '@cfworker/json-schema';   // interprets schemas; no c
 import { describe, expect, it } from 'vitest';
 import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import schema from '../../ir/schema/ir.schema.json' with { type: 'json' };
-import { diagramOf, diagramPath, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
+import { diagramOf, diagramPath, diagramTitle, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
 import { EmptyFileSystem, URI } from 'langium';
 import { loadWorkspace } from '../src/cli/load.js';
 import { toIR } from '../src/ir/ast-to-ir.js';
@@ -394,8 +394,9 @@ describe('diagrams of their own', () => {
         expect(r.diagnostics).toEqual([]);
         const ids = (root?: string) => toFlowGraph(r.ir, { root }).nodes.map(n => n.id);
         expect(ids()).toEqual(['m.t', 'm.t.run']);
-        expect(ids('m.t.run')).toEqual(['m.t.run', 'm.t.run.a', 'm.t.run.b', 'm.t.run.sub']);
-        expect(ids('m.t.run.sub')).toEqual(['m.t.run.sub', 'm.t.run.sub.deep']);
+        // Not itself: hosts show its name above the canvas.
+        expect(ids('m.t.run')).toEqual(['m.t.run.a', 'm.t.run.b', 'm.t.run.sub']);
+        expect(ids('m.t.run.sub')).toEqual(['m.t.run.sub.deep']);
         const inner = toFlowGraph(r.ir, { root: 'm.t.run' });
         expect(inner.nodes.find(n => n.id === 'm.t.run.sub')!.data.opens).toBe(true);
         expect(inner.edges.map(e => e.id)).toEqual(['m.t.run.a--next->m.t.run.b']);
@@ -404,16 +405,44 @@ describe('diagrams of their own', () => {
         expect(diagramOf(r.ir, 'm.t.run.sub.deep')).toBe('m.t.run.sub');
     });
 
-    it('frame what they hold where it was left, and their place is the node around them', async () => {
+    it('draw what they hold at the top level, where it was left, titled with their name', async () => {
         const r = await load();
-        const layout = { 'm.t.run': { x: -900, y: -900, width: 50, height: 50 }, 'm.t.run.a': { x: 100, y: 100 }, 'm.t.run.b': { x: 300, y: 200 } };
+        const layout = { 'm.t.run': { x: -900, y: -900 }, 'm.t.run.a': { x: 100, y: 100 }, 'm.t.run.b': { x: 300, y: 200 } };
         const g = toFlowGraph(r.ir, { root: 'm.t.run', layout });
         const node = (id: string) => g.nodes.find(n => n.id === id)!;
-        // The outer diagram's entry for it isn't used: it sits where its contents are.
-        expect(node('m.t.run').data.position).toEqual({ x: 200, y: 150 });
-        expect(node('m.t.run.a').data.position).toEqual({ x: 100, y: 100 });
+        expect(node('m.t.run.a')).toMatchObject({ data: { position: { x: 100, y: 100 } } });
+        expect(node('m.t.run.a').parentId).toBeUndefined();
+        expect(placedNodes(g.nodes).map(n => n.id)).toEqual(['m.t.run.a', 'm.t.run.b', 'm.t.run.sub']);
+        // Its own place is its node's, in the diagram around it.
         expect(toFlowGraph(r.ir, { layout }).nodes.find(n => n.id === 'm.t.run')!.data.position).toEqual({ x: -900, y: -900 });
-        // Its place isn't stored from inside.
-        expect(placedNodes(g.nodes, 'm.t.run').map(n => n.id)).toEqual(['m.t.run.a', 'm.t.run.b', 'm.t.run.sub']);
+        expect(diagramTitle(r.ir, 'm.t.run')).toBe('run');
+    });
+});
+
+describe('hidden when alone', () => {
+    const profile = `profile h {
+        kind Machine { contains regions: Lane [1..*]  visual { diagram: true } }
+        kind Lane { contains steps: Step [0..*]  visual { container: true  layout: "free"  hideWhenAlone: true } }
+        kind Step { contains regions: Lane [0..*]  visual { container: true  layout: "free"  diagram: true } }
+    }`;
+    const model = `model m {
+        Machine one { Lane only { Step a {} Step plain {} } }
+        Machine two { Lane left { Step b {} }  Lane right { Step c {} } }
+        Machine deep { Lane only { Step outer { Lane inner { Step x {} } } } }
+    }`;
+    const load = () => loadWorkspace([{ uri: 'h.arbor', text: profile }, { uri: 'm.arbor', text: model }]);
+
+    it('leaves out the only one in its containment, its contents taking its place, but draws several', async () => {
+        const r = await load();
+        expect(r.diagnostics).toEqual([]);
+        const nodes = (root: string) => toFlowGraph(r.ir, { root }).nodes.map(n => [n.id, n.parentId ?? null]);
+        expect(nodes('m.one')).toEqual([['m.one.only.a', null], ['m.one.only.plain', null]]);
+        expect(nodes('m.two')).toEqual([['m.two.left', null], ['m.two.left.b', 'm.two.left'], ['m.two.right', null], ['m.two.right.c', 'm.two.right']]);
+        // A step holding something opens a diagram of its own; one holding nothing is just a node.
+        const deep = toFlowGraph(r.ir, { root: 'm.deep' }).nodes;
+        expect(deep.map(n => [n.id, n.data.opens ?? false])).toEqual([['m.deep.only.outer', true]]);
+        expect(toFlowGraph(r.ir, { root: 'm.one' }).nodes.some(n => n.data.opens)).toBe(false);
+        expect(nodes('m.deep.only.outer')).toEqual([['m.deep.only.outer.inner.x', null]]);
+        expect(diagramPath(r.ir, 'm.deep.only.outer').map(e => e.id)).toEqual(['m.deep', 'm.deep.only.outer']);
     });
 });
