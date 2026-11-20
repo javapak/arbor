@@ -2,7 +2,7 @@ import { Validator } from '@cfworker/json-schema';   // interprets schemas; no c
 import { describe, expect, it } from 'vitest';
 import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import schema from '../../ir/schema/ir.schema.json' with { type: 'json' };
-import { toFlowGraph } from '@arbor/adapter-flow';
+import { placedNodes, toFlowGraph } from '@arbor/adapter-flow';
 import { EmptyFileSystem, URI } from 'langium';
 import { loadWorkspace } from '../src/cli/load.js';
 import { toIR } from '../src/ir/ast-to-ir.js';
@@ -326,5 +326,47 @@ describe('IR -> flow graph', () => {
             { uri: 'm.arbor', text: 'model m { K k {} }' }
         ]);
         expect(toFlowGraph(r.ir).nodes[0].visual.shape).toBe('rectangle');
+    });
+});
+
+describe('free containers', () => {
+    const profile = `profile f {
+        kind Box {
+            contains items: Item [0..*]
+            contains boxes: Box [0..*]
+            visual { container: true  layout: "free"  width: 100  height: 60 }
+        }
+        kind List { contains items: Item [0..*]  visual { container: true } }
+        kind Item { prop note: string [0..1]  visual { width: 80  height: 40 } }
+    }`;
+    const load = (model: string) => loadWorkspace([{ uri: 'f.arbor', text: profile }, { uri: 'm.arbor', text: model }]);
+
+    it('draws contents as nodes of their own, where the layout puts them, or on a grid inside', async () => {
+        const r = await load('model m { Box b { Item placed {} Item first {} Item second {}  Box inner { Item deep {} } }  List l { Item row {} } }');
+        expect(r.diagnostics).toEqual([]);
+        const g = toFlowGraph(r.ir, { layout: { 'm.b': { x: 0, y: 0 }, 'm.b.placed': { x: 500, y: 300, width: 90, height: 50 } } });
+        const node = (id: string) => g.nodes.find(n => n.id === id)!;
+        expect(node('m.b').visual).toMatchObject({ container: true, layout: 'free' });
+        expect(node('m.l').visual.layout).toBeUndefined();
+        // Not rows: their own size, and the stored place, absolute like a top-level node's.
+        expect(node('m.b.placed')).toMatchObject({ parentId: 'm.b', data: { position: { x: 500, y: 300 }, size: { width: 90, height: 50 } } });
+        expect(node('m.b.first').visual.presentation).toBeUndefined();
+        expect(node('m.l.row').visual.presentation).toBe('row');
+        // The rest: a grid from the top-left of the box, under its header, which grows to hold it.
+        const box = node('m.b').data, first = node('m.b.first').data.position, second = node('m.b.second').data.position;
+        const left = box.position.x - box.size.width / 2, top = box.position.y - box.size.height / 2;
+        expect(first).toEqual({ x: left + 8 + 40, y: top + 28 + 8 + 20 });
+        expect(second.x).toBe(first.x + 80 + 40);
+        expect(node('m.b.inner.deep').parentId).toBe('m.b.inner');
+        const inner = node('m.b.inner').data;
+        expect(inner.size.width).toBeGreaterThanOrEqual(80 + 16);
+        expect(box.size.width).toBeGreaterThanOrEqual(2 * 80 + 40 + 16);
+        // Positions to store: top-level nodes and what free containers hold, not a list's rows.
+        expect(placedNodes(g.nodes).map(n => n.id)).toEqual(['m.b', 'm.b.placed', 'm.b.first', 'm.b.second', 'm.b.inner', 'm.b.inner.deep', 'm.l']);
+    });
+
+    it('is a visual key the profile is checked against', async () => {
+        const r = await loadWorkspace([{ uri: 'f.arbor', text: 'profile g { kind K { visual { container: true  layout: "loose" } } }' }]);
+        expect(r.diagnostics.find(d => d.code === 'ARB008')?.message).toMatch(/layout.*rows, free/);
     });
 });

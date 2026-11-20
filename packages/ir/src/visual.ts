@@ -6,6 +6,7 @@
  * webgpu-flow). A new renderer feature starts here, then gets mapped by the
  * adapters that can draw it.
  */
+import { checkTemplate } from './template.js';
 import type { IRScalar } from './types.js';
 
 export const VISUAL_SHAPES = [
@@ -26,7 +27,7 @@ export interface VisualKeySpec {
     /** Allowed values, for enumerated strings. */
     values?: readonly string[];
     /** Format check for free strings. */
-    format?: 'hex-color' | 'svg';
+    format?: 'hex-color' | 'svg' | 'template';
     description: string;
 }
 
@@ -39,10 +40,11 @@ export const VISUAL_KEYS = {
     color:      { type: 'string', format: 'hex-color', description: 'fill color' },
     labelColor: { type: 'string', format: 'hex-color', description: 'label text color' },
     iconColor:  { type: 'string', format: 'hex-color', description: 'icon color' },
-    label:      { type: 'string', description: 'label template: {name}, {kind}, or any slot ({type} gives a reference target\'s name)' },
+    label:      { type: 'string', format: 'template', description: 'label template: {name}, {kind}, or any slot ({type} gives a reference target\'s name); {? … } is shown only when its slots are set' },
     width:      { type: 'number', description: 'default width' },
     height:     { type: 'number', description: 'default height' },
     container:  { type: 'bool', description: 'the node draws the elements it contains inside itself' },
+    layout:     { type: 'string', values: ['rows', 'free'], description: 'how a container places what it contains: in rows (default), or where they\'re dragged, growing to hold them' },
     member:     { type: 'bool', description: 'drawn inside whatever contains it, as a row (like a UML attribute)' },
     // A kind with both `source` and `target` is drawn as an edge between them, like a UML generalization.
     source:     { type: 'string', description: 'draw elements of this kind as edges: from this reference\'s target, or "owner" (the containing element)' },
@@ -50,8 +52,8 @@ export const VISUAL_KEYS = {
     line:       { type: 'string', values: ['solid', 'dashed', 'dotted'], description: 'an edge kind\'s line' },
     sourceMarker: { type: 'string', values: EDGE_MARKER_VALUES, description: 'an edge kind\'s marker at its source' },
     targetMarker: { type: 'string', values: EDGE_MARKER_VALUES, description: 'an edge kind\'s marker at its target' },
-    sourceLabel: { type: 'string', description: 'an edge kind\'s text at its source end: a label template' },
-    targetLabel: { type: 'string', description: 'an edge kind\'s text at its target end: a label template' }
+    sourceLabel: { type: 'string', format: 'template', description: 'an edge kind\'s text at its source end: a label template' },
+    targetLabel: { type: 'string', format: 'template', description: 'an edge kind\'s text at its target end: a label template' }
 } as const satisfies Record<string, VisualKeySpec>;
 export type VisualKey = keyof typeof VISUAL_KEYS;
 
@@ -72,9 +74,9 @@ export const EDGE_VISUAL_KEYS = {
     sourceMarker: { type: 'string', values: EDGE_MARKERS, description: 'marker at the owning element\'s end' },
     targetMarker: { type: 'string', values: EDGE_MARKERS, description: 'marker at the target\'s end' },
     color:        { type: 'string', format: 'hex-color', description: 'line color' },
-    label:        { type: 'string', description: 'text at the middle: a template, "" for none (default {name})' },
-    sourceLabel:  { type: 'string', description: 'text at the owning element\'s end: a template' },
-    targetLabel:  { type: 'string', description: 'text at the target\'s end: a template, e.g. "{name} {multiplicity}"' },
+    label:        { type: 'string', format: 'template', description: 'text at the middle: a template, "" for none (default {name})' },
+    sourceLabel:  { type: 'string', format: 'template', description: 'text at the owning element\'s end: a template' },
+    targetLabel:  { type: 'string', format: 'template', description: 'text at the target\'s end: a template, e.g. "{name} {multiplicity}"' },
     hidden:       { type: 'bool', description: 'don\'t draw the feature\'s edges (derived references default to true)' }
 } as const satisfies Record<string, VisualKeySpec>;
 export type EdgeVisualKey = keyof typeof EDGE_VISUAL_KEYS;
@@ -97,5 +99,6 @@ export function checkVisualValue(key: string, value: IRScalar, keys: Record<stri
     if (spec.values && !spec.values.includes(value)) return `expected one of ${spec.values.join(', ')}`;
     if (spec.format === 'hex-color' && !/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) return 'expected a hex color like "#0ea5e9"';
     if (spec.format === 'svg' && !/^\s*<svg[\s>]/.test(value)) return 'expected SVG markup starting with <svg';
+    if (spec.format === 'template') return checkTemplate(value);
     return undefined;
 }

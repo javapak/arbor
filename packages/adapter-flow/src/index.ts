@@ -24,7 +24,7 @@
  * renderers. Keep them in step.
  */
 import {
-    IRIndex, OWNER_END, VISUAL_SHAPES, displayName, valueText,
+    IRIndex, OWNER_END, VISUAL_SHAPES, displayName, fillTemplate, templateSlots, valueText,
     type EdgeMarker, type IRDocument, type IRElement, type IRFeature, type IRMultiplicity, type IRScalar, type IRVisual, type VisualShape
 } from '@arbor/ir';
 
@@ -86,6 +86,8 @@ export interface FlowNode {
         visualContent?: VisualContent;
         /** The kind draws the elements it contains inside itself. */
         container: boolean;
+        /** 'free': a container whose contents keep their own places (stored in the layout), not rows. */
+        layout?: 'free';
         /** 'row': drawn in its container as an icon and a label on one line. */
         presentation?: 'row';
         /** Text at the right end of a row: the kind's name as a UML stereotype, «Entity» (not for members). */
@@ -214,6 +216,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                 visual: {
                     ...kindVisual(v, size, contentSize),
                     container: v.container === true,
+                    ...(isFreeVisual(v) ? { layout: 'free' as const } : {}),
                     // A member's kind is clear from where it is (every row in an Entity is a Column).
                     ...(boxes.isRow(el)
                         ? { presentation: 'row' as const, ...(el.stereotypes?.length ? { detail: index.stereotypeLabel(el) }
@@ -252,7 +255,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
         const size = kindSize(v, defaultSize);
         return {
             id: k.id, label: k.name, group: p.name, type: k.name,
-            visual: { ...kindVisual(v, size, contentSize), container: v.container === true },
+            visual: { ...kindVisual(v, size, contentSize), container: v.container === true, ...(isFreeVisual(v) ? { layout: 'free' as const } : {}) },
             data: { kind: k.id }
         };
     }));
@@ -314,10 +317,8 @@ function endLabels(v: IRVisual | undefined, fill: (template: string) => string):
 
 /** A feature edge's labels: its visuals' templates over `{name}` and `{multiplicity}`, else the feature's name in the middle. */
 function featureLabels(name: string, f: IRFeature | undefined): Omit<FlowEdge['data'], 'relation'> {
-    const fill = (template: string) => template
-        .replace(/\{name\}/g, name)
-        .replace(/\{multiplicity\}/g, f ? multiplicityText(f.multiplicity) : '')
-        .trim();
+    const fill = (template: string) => fillTemplate(template, k =>
+        k === 'name' ? name : k === 'multiplicity' && f ? multiplicityText(f.multiplicity) : undefined).trim();
     const v = edgeVisual(f);
     return { label: typeof v?.label === 'string' ? fill(v.label) : name, feature: name, ...endLabels(v, fill) };
 }
@@ -373,24 +374,25 @@ function kindSize(v: Record<string, IRScalar>, fallback: { width: number; height
 /**
  * `label` in the profile may use {name}, {kind}, and any slot of the element:
  * a property's value, or the names of a reference's targets. A slot that isn't
- * set is left empty. Plain substitution; no evaluation.
+ * set is left empty, and so is an optional part `{? … }` that shows one.
+ * Plain substitution (see @arbor/ir's fillTemplate); no evaluation.
  */
 function labelFor(el: IRElement, template: unknown, index: IRIndex): string {
     if (typeof template !== 'string') return displayName(el);
-    return template.replace(/\{(\w+)\}/g, (_, k: string) => {
+    return fillTemplate(template, k => {
         if (k === 'name') return el.name;
         if (k === 'kind') return el.kind.split('.').pop() ?? '';
         const targets = el.references[k];
         if (targets) return targets.map(t => index.elements.get(t)?.name ?? t).join(', ');
         const value = el.properties[k];
-        return value === undefined ? '' : Array.isArray(value) ? value.join(', ') : String(value);
+        return value === undefined ? undefined : Array.isArray(value) ? value.join(', ') : String(value);
     }).trim();
 }
 
-/** The slots a label template shows (besides {name} and {kind}). */
+/** The slots a label template shows (besides {name} and {kind}), optional parts included. */
 function labelSlots(template: unknown): Set<string> {
     if (typeof template !== 'string') return new Set();
-    return new Set([...template.matchAll(/\{(\w+)\}/g)].map(m => m[1]).filter(k => k !== 'name' && k !== 'kind'));
+    return new Set(templateSlots(template).filter(k => k !== 'name' && k !== 'kind'));
 }
 
 function visualContentOf(v: Record<string, IRScalar>, px: number): VisualContent | undefined {
@@ -424,6 +426,47 @@ const MAX_LINE = 32;
 type Box = { x: number; y: number; width: number; height: number };
 type Size = { width: number; height: number };
 
+/**
+ * The nodes whose positions belong in the layout: top-level ones, and those in
+ * a free container, which leaves them where they are. Other containers place
+ * what's inside them. Takes the renderer's nodes, or this adapter's.
+ */
+export function placedNodes<N extends { id: string; parentId?: string; visual?: object }>(nodes: readonly N[]): N[] {
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const free = (n: N | undefined) => (n?.visual as { layout?: unknown } | undefined)?.layout === 'free';
+    return nodes.filter(n => !n.parentId || free(byId.get(n.parentId)));
+}
+
+/** A container whose contents keep their own places, like nodes on the canvas (see webgpu-flow's utils/Nesting). */
+function isFreeVisual(v: Record<string, IRScalar>): boolean {
+    return v.container === true && v.layout === 'free';
+}
+
+/** Space between the contents a free container places itself, when they have no places yet. */
+const FREE_GAP = 40;
+
+/**
+ * Where a free container puts contents that have no places of their own: a
+ * grid, about as wide as tall, as centres from the top-left of its content area.
+ */
+function freeGrid(sizes: Size[]): { offsets: Array<{ x: number; y: number }>; extent: Size } {
+    const cols = Math.max(1, Math.ceil(Math.sqrt(sizes.length)));
+    const offsets: Array<{ x: number; y: number }> = [];
+    let top = 0, width = 0;
+    for (let row = 0; row * cols < sizes.length; row++) {
+        const items = sizes.slice(row * cols, (row + 1) * cols);
+        const height = Math.max(...items.map(s => s.height));
+        let left = 0;
+        for (const s of items) {
+            offsets.push({ x: left + s.width / 2, y: top + height / 2 });
+            left += s.width + FREE_GAP;
+        }
+        width = Math.max(width, left - FREE_GAP);
+        top += height + FREE_GAP;
+    }
+    return { offsets, extent: { width, height: Math.max(0, top - FREE_GAP) } };
+}
+
 /** The owner an element is drawn inside: its owner, when the owner's kind is a container or the element's a member. */
 function containerOf(index: IRIndex): (el: IRElement) => string | undefined {
     return el => {
@@ -438,7 +481,8 @@ function containerOf(index: IRIndex): (el: IRElement) => string | undefined {
  * positions keep their place; the others go on a grid, in model order,
  * skipping cells taken by positioned ones. A container is as big as the
  * renderer will make it to hold its children, which it arranges itself: they
- * are placed at its centre here, and their layout entries don't count.
+ * are placed at its centre here, and their layout entries don't count. A free
+ * container's children are where the layout puts them, or on a grid inside it.
  */
 function placeElements(
     doc: IRDocument, layout: Layout, index: IRIndex, size: Size,
@@ -452,28 +496,49 @@ function placeElements(
         if (owner) children.set(owner, [...(children.get(owner) ?? []), el]);
     }
 
-    // A nested element that doesn't hold nested elements itself is a row.
-    const isRow = (el: IRElement) => !!nestedIn(el) && !children.get(el.id)?.length;
+    const free = (el: IRElement) => isFreeVisual(index.visual(el.kind));
+    const ownerOf = (el: IRElement) => {
+        const owner = nestedIn(el);
+        return owner ? index.elements.get(owner) : undefined;
+    };
+    // A nested element that doesn't hold nested elements itself is a row, unless it's in a free container.
+    const isRow = (el: IRElement) => !!nestedIn(el) && !children.get(el.id)?.length && !free(ownerOf(el)!);
     const sizes = new Map<string, Size>();
+    /** A free container's contents without places: their centres from the top-left of its box. */
+    const unplaced = new Map<string, Map<string, { x: number; y: number }>>();
     const measure = (el: IRElement): Size => {
         const known = sizes.get(el.id);
         if (known) return known;
         const kids = children.get(el.id) ?? [];
         const lines = compartments.get(el.id) ?? [];
         let result: Size;
-        if (!isRow(el) && (kids.length || lines.length || index.visual(el.kind).container === true)) {
+        if (free(el)) {
+            // Its own size, and room for whatever it has to place itself (the renderer grows it to hold the rest).
+            const entry = layout[el.id], base = kindSize(index.elementVisual(el), size);
+            const above = NEST_HEADER + (lines.length ? NEST_PADDING + lines.length * LINE_HEIGHT + SECTION_GAP : 0);
+            const textWidth = Math.max(0, ...lines.map(l => l.length * CHAR_WIDTH + 2 * ROW_INSET));
+            const homeless = kids.filter(k => !layout[k.id]);
+            const grid = freeGrid(homeless.map(measure));
+            unplaced.set(el.id, new Map(homeless.map((k, i) => [k.id, {
+                x: NEST_PADDING + grid.offsets[i].x, y: above + NEST_PADDING + grid.offsets[i].y
+            }])));
+            result = {
+                width: Math.max(entry?.width ?? base.width, Math.max(textWidth, grid.extent.width) + 2 * NEST_PADDING),
+                height: Math.max(entry?.height ?? base.height, above + (homeless.length ? grid.extent.height + 2 * NEST_PADDING : lines.length ? NEST_PADDING : 0))
+            };
+        } else if (!isRow(el) && (kids.length || lines.length || index.visual(el.kind).container === true)) {
             const extent = kids.length ? columnsExtent(kids.map(measure)) : { width: 0, height: 0 };
             const text = lines.length ? lines.length * LINE_HEIGHT + (kids.length ? SECTION_GAP : 0) : 0;
             const textWidth = Math.max(0, ...lines.map(l => l.length * CHAR_WIDTH + 2 * ROW_INSET));
-            const entry = layout[el.id], own = nestedIn(el) ? 0 : entry?.width ?? kindSize(index.visual(el.kind), size).width;
+            const entry = layout[el.id], own = nestedIn(el) ? 0 : entry?.width ?? kindSize(index.elementVisual(el), size).width;
             result = {
                 width: Math.max(own, Math.max(kids.length ? ROW_WIDTH : 0, extent.width, textWidth) + 2 * NEST_PADDING),
                 height: NEST_HEADER + text + extent.height + (text || extent.height ? 2 * NEST_PADDING : 0)
             };
-        } else if (nestedIn(el)) {
+        } else if (isRow(el)) {
             result = { width: ROW_WIDTH, height: ROW_HEIGHT };
         } else {
-            const entry = layout[el.id], base = kindSize(index.visual(el.kind), size);
+            const entry = layout[el.id], base = kindSize(index.elementVisual(el), size);
             result = { width: entry?.width ?? base.width, height: entry?.height ?? base.height };
         }
         sizes.set(el.id, result);
@@ -483,8 +548,14 @@ function placeElements(
 
     const boxes = Object.assign(new Map<string, Box>(), { isRow });
     const put = (el: IRElement, at: { x: number; y: number }) => {
-        boxes.set(el.id, { x: at.x, y: at.y, ...sizes.get(el.id)! });
-        for (const c of children.get(el.id) ?? []) put(c, at);
+        const own = sizes.get(el.id)!;
+        boxes.set(el.id, { x: at.x, y: at.y, ...own });
+        const home = unplaced.get(el.id);
+        for (const c of children.get(el.id) ?? []) {
+            // In a free container, where it was left (an absolute position, like a top-level node's), or on its grid.
+            const offset = home?.get(c.id), entry = layout[c.id];
+            put(c, !home ? at : entry ? { x: entry.x, y: entry.y } : { x: at.x - own.width / 2 + offset!.x, y: at.y - own.height / 2 + offset!.y });
+        }
     };
     const topLevel = elements.filter(el => !nestedIn(el));
     const place = gridPlacer(topLevel, layout, el => sizes.get(el.id)!, size, grid);
@@ -495,12 +566,15 @@ function placeElements(
 /**
  * An element's compartment: each property written in its text (not the
  * profile's defaults; references are edges), in the order the kind declares
- * them, as `name = value`, the value as the text writes it (see `valueText`).
+ * them, as `name = value`, the value as the text writes it (see `valueText`),
+ * except those a `visual when` tests, which its looks already show.
  */
 function propertyLines(el: IRElement, index: IRIndex): string[] {
     const lines: string[] = [];
+    // A property a `visual when` tests is shown by how the element looks (a choice's diamond).
+    const styling = new Set(index.lineage(el.kind).flatMap(k => (k.visualWhen ?? []).map(c => c.feature)));
     for (const f of index.elementFeatures(el)) {
-        if (f.feature !== 'property' || !Object.hasOwn(el.properties, f.name)) continue;
+        if (f.feature !== 'property' || !Object.hasOwn(el.properties, f.name) || styling.has(f.name)) continue;
         const line = `${f.name} = ${valueText(index, f.type, el.properties[f.name])}`;
         lines.push(line.length > MAX_LINE ? `${line.slice(0, MAX_LINE - 1)}…` : line);
     }

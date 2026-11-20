@@ -53,9 +53,29 @@ profile persistence version "0.1.0" {
   - `icon`: an emoji drawn on the node.
   - `color`, `labelColor`, `iconColor` (hex), `width`, `height`.
   - `label`: a template with `{name}`, `{kind}`, or any slot: a property's value, or a reference's target names (`"{name} : {type}"`). A reference the label shows isn't also drawn as an edge.
+    A slot that isn't set is left empty. An **optional part** `{? … }` is shown only when every slot directly in it is set, so text around a slot disappears with it: `"{name}(){? : {returns}}"` reads `lend() : Date`, or just `chargeFine()`; a UML transition is `"{trigger}{? [{guard}]}{? / {effect}}"`. Optional parts can nest. Any other `{` or `}` is text. An optional part that's never closed is a warning (ARB008). `sourceLabel`, `targetLabel` and edge labels are templates too.
   - `container: true`: the diagram draws the elements this kind contains inside it, as rows (or nested boxes), instead of as composition edges. See [VSCODE.md](VSCODE.md#how-elements-are-drawn).
+  - `layout: "free"` (with `container: true`): the contents keep their own shapes and go where they're dragged, like nodes on the canvas, and the container grows to hold them. Use it for diagrams drawn inside a box, such as a state machine's states or a composite state's regions. The default, `"rows"`, lists them in the text's order.
   - `member: true`: elements of this kind are drawn inside whatever contains them, as rows, like a UML class's attributes (`software.Field`, and so `persistence.Column`).
   - `source` and `target`: draw elements of this kind as **edges**, not nodes, between the elements two of its references name, or its `"owner"` (the element containing it). An edge kind can also set `line`, `sourceMarker`, `targetMarker`, `sourceLabel` and `targetLabel` (below), and its `label` is drawn at the middle (default `{name}`). Until both ends are set, the element is drawn as a node, so you can still see it and connect it.
+
+### Visuals by value
+
+A kind can restyle some of its elements by the value of one of their properties: written, or its default.
+
+```
+kind Pseudostate extends Vertex {
+    prop kind: PseudostateKind = initial
+    visual { shape: "initialNode"  color: "#1e293b"  width: 24  height: 24 }
+    visual when kind = choice { shape: "diamond"  color: "#e9d5ff"  width: 32  height: 32 }
+    visual when kind = fork   { shape: "rectangle"  width: 80  height: 8 }
+}
+```
+
+- The property is the kind's own or inherited, holds one value, and isn't a datatype; the value fits its type (ARB013 otherwise).
+- Blocks that match are applied over the kind's visuals, inherited ones first, then in the order written; an applied stereotype's visuals still come last.
+- Like a stereotype's, they restyle (shape, colour, size, label, icon…) but can't change how the kind is laid out: `container`, `layout`, `member`, `source` and `target` are ignored there, with a warning.
+- The property they test isn't also listed in the element's box: how it looks already shows it.
 
 ### Feature modifiers
 
@@ -90,7 +110,7 @@ kind DataProperty extends Property {
 | `subsets f, g` | This feature's values are also `f`'s and `g`'s (same kind, same sort of feature, a fitting type, no more values allowed). A nested element fitting a containment and one it subsets goes into the more specific one. |
 | `redefines f, g` | Replaces inherited features `f` and `g` (fitting type): elements of this kind no longer have them. Redefining a feature of the same name needs no clause. |
 
-These words are keywords, so they can't be element names or enum literals, but they can still be feature and slot names (`unique: true`).
+These words (and `when`) are keywords, so they can't be element names or enum literals, but they can still be feature and slot names (`unique: true`).
 
 ### Edge styles
 
@@ -124,7 +144,7 @@ kind Generalization {
 }
 ```
 
-[samples/uml](https://github.com/javapak/arbor/tree/main/samples/uml) has a small UML class-diagram profile (classes, interfaces, generalizations, realizations, dependencies, associations, compositions), an `orm` profile of stereotypes for it, and a model using both. It has its own folder because its kind names (`Package`, `Interface`, `Operation`) would be ambiguous next to `software`'s.
+[samples/uml](https://github.com/javapak/arbor/tree/main/samples/uml) has a small UML profile: class diagrams (classes, interfaces, generalizations, realizations, dependencies, associations, compositions) and state machines (regions, states, pseudostates, transitions), an `orm` profile of stereotypes for it, a class model using both, and a loan's lifecycle as a state machine owned by its class (`loan.arbor`). It has its own folder because its kind names (`Package`, `Interface`, `Operation`) would be ambiguous next to `software`'s.
 
 ## Models
 
@@ -183,11 +203,12 @@ Every element has the same shape:
 | ARB005 | bad multiplicity |
 | ARB006 | unknown visual key (warning) |
 | ARB007 | simple name defined by several profiles (or models); write the qualified name listed in the message |
-| ARB008 | visual value doesn't fit its key, e.g. unknown shape or non-hex color (warning; `fix` = closest shape) |
+| ARB008 | visual value doesn't fit its key, e.g. unknown shape, non-hex color, or an unclosed `{?` in a template (warning; `fix` = closest shape) |
 | ARB009 | bad `opposite`: unknown feature, not a reference or containment, doesn't point back, or names another opposite |
 | ARB010 | bad `subsets`: unknown feature, different sort or type, or allows more values than the feature it subsets |
 | ARB011 | bad `redefines`: no inherited feature of that name, or a different sort or type |
 | ARB012 | bad stereotype: a feature its kinds already have, or a containment |
+| ARB013 | bad `visual when`: not a single-valued, non-datatype property of the kind, a value that doesn't fit it, used in a stereotype; or a layout key in it (warning) |
 | ARB101 | abstract kind instantiated |
 | ARB102 | unknown slot (`fix` = closest feature) |
 | ARB103 | value has the wrong type |

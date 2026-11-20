@@ -63,14 +63,17 @@ function visualOf(visuals: Visual[]): Record<string, IRScalar> {
 }
 
 function kindToIR(k: Kind): IRKind {
-    const visual = visualOf(k.visuals);
+    const visual = visualOf(k.visuals.filter(v => !v.when));
+    const visualWhen = k.visuals.flatMap(v => (v.when
+        ? [{ feature: v.when.feature, value: literalValue(v.when.value), visual: visualOf([v]) }] : []));
     return {
         id: kindId(k),
         name: k.name,
         abstract: k.abstract,
         extends: k.supers.flatMap(s => (s.ref ? [kindId(s.ref)] : [])),
         features: k.features.flatMap(featureToIR),
-        visual
+        visual,
+        ...(visualWhen.length ? { visualWhen } : {})
     };
 }
 

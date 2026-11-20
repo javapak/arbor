@@ -1,3 +1,4 @@
+import { toFlowGraph } from '@arbor/adapter-flow';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -119,8 +120,26 @@ describe('profile validation', () => {
 
     it('the UML sample is clean', async () => {
         const dir = fileURLToPath(new URL('../../../samples/uml/', import.meta.url));
-        const r = await loadWorkspace(['uml.arbor', 'orm.arbor', 'library.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
+        const r = await loadWorkspace(['uml.arbor', 'orm.arbor', 'library.arbor', 'loan.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
         expect(r.diagnostics).toEqual([]);
+        // The state machine: owned by Loan, and a free container: its region, the region's states and a
+        // composite state's own region are drawn inside one another, where they're placed, not as rows.
+        const g = toFlowGraph(r.ir);
+        const sm = 'lending.Loan.Lifecycle', main = `${sm}.main`, terms = `${main}.Active.terms`;
+        const node = (id: string) => g.nodes.find(n => n.id === id)!;
+        expect(g.edges.find(e => e.targetNodeId === sm)?.data).toMatchObject({ relation: 'containment', label: 'ownedBehavior' });
+        expect(node(sm).visual).toMatchObject({ container: true, layout: 'free' });
+        expect([node(main).parentId, node(`${main}.Active`).parentId, node(terms).parentId, node(`${terms}.Lent`).parentId])
+            .toEqual([sm, main, `${main}.Active`, terms]);
+        expect(node(`${main}.Overdue`).visual.presentation).toBeUndefined();
+        expect(node(`${main}.Overdue`).data.size).toEqual({ width: 230.5, height: 86 });   // header, then its compartment, as the renderer sizes it
+        const labels = (region: string) => g.edges.filter(e => e.id.startsWith(`${region}.Transition#`)).map(e => e.data.label);
+        expect(labels(main)).toEqual(['', 'returned', 'after(14 days)', 'returned', '[fine == 0]', '[fine > 0] / chargeFine()',
+            'after(90 days)', 'paid [amount >= replacementCost]']);
+        // Pseudostates are drawn by their kind: the initial one by default, a choice as a diamond.
+        expect(node(`${main}.start`).visual).toMatchObject({ shape: 'initialNode', size: { width: 24, height: 24 } });
+        expect(node(`${main}.assess`).visual).toMatchObject({ shape: 'diamond', color: '#e9d5ff', size: { width: 32, height: 32 } });
+        expect(labels(terms)).toEqual(['', 'renew [renewals < 3]']);
     });
 
     it('bad multiplicity', async () => {

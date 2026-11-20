@@ -395,3 +395,80 @@ describe('stereotypes', () => {
         ]);
     });
 });
+
+describe('visual when', () => {
+    const profile = `profile v {
+        enum Mode { plain, loud, quiet }
+        kind Node {
+            prop mode:  Mode = plain
+            prop ready: bool [0..1]
+            prop tags:  string [0..*]
+            ref  other: Node [0..1]
+            visual { shape: "rectangle"  color: "#111111"  width: 100 }
+            visual when mode = loud   { color: "#ff0000"  width: 140 }
+            visual when ready = true  { icon: "✓" }
+        }
+        kind Special extends Node {
+            visual when mode = loud { shape: "diamond" }
+            visual when mode = plain { color: "#00ff00" }
+        }
+        stereotype Muted extends Node { visual { color: "#999999" } }
+    }`;
+
+    it('restyles the elements whose property, written or by default, has the value', async () => {
+        const r = await load(`model m {
+            Node a {}
+            Node b { mode: loud  ready: true }
+            Special c { mode: loud }
+            Special d {}
+            <<Muted>> Node e { mode: loud }
+        }`, profile);
+        expect(r.diagnostics).toEqual([]);
+        const index = new IRIndex(r.ir);
+        const visual = (id: string) => index.elementVisual(index.elements.get(id)!);
+        expect(visual('m.a')).toEqual({ shape: 'rectangle', color: '#111111', width: 100 });
+        expect(visual('m.b')).toEqual({ shape: 'rectangle', color: '#ff0000', width: 140, icon: '✓' });
+        // Inherited blocks first, then the kind's own; a stereotype still has the last word.
+        expect(visual('m.c')).toEqual({ shape: 'diamond', color: '#ff0000', width: 140 });
+        expect(visual('m.d')).toMatchObject({ color: '#00ff00' });   // the default, plain
+        expect(visual('m.e')).toMatchObject({ color: '#999999', width: 140 });
+        expect(index.kinds.get('v.Node')!.visualWhen).toEqual([
+            { feature: 'mode', value: 'loud', visual: { color: '#ff0000', width: 140 } },
+            { feature: 'ready', value: true, visual: { icon: '✓' } }
+        ]);
+        // Sizes follow, and the tested property isn't listed: the looks show it.
+        const node = toFlowGraph(r.ir).nodes.find(n => n.id === 'm.b')!;
+        expect(node.visual.size.width).toBe(140);
+        expect(node.visual.compartment).toBeUndefined();
+    });
+
+    it('tests one value of a property of the kind, and only restyles', async () => {
+        const r = await loadWorkspace([{ uri: 'p.arbor', text: `profile w {
+            enum Mode { plain, loud }
+            datatype Point { prop x: int [1] }
+            kind K {
+                prop mode: Mode [0..1]
+                prop tags: string [0..*]
+                prop at:   Point [0..1]
+                ref  other: K [0..1]
+                visual when mood = loud  {}
+                visual when other = loud {}
+                visual when tags = "a"   {}
+                visual when at = 1       {}
+                visual when mode = shout {}
+                visual when mode = loud  { container: true  color: "#ff0000" }
+            }
+            stereotype S extends K { visual when mode = loud { color: "#ff0000" } }
+        }` }]);
+        const by = (severity: string) => r.diagnostics.filter(d => d.code === C.BadVisualCondition && d.severity === severity).map(d => d.message);
+        expect(by('error')).toEqual([
+            "K has no property 'mood'. Did you mean 'mode'?",
+            "'other' is a reference; 'visual when' tests a property's value.",
+            "'tags' holds several values; 'visual when' tests a property with one.",
+            "'at' holds Point values; 'visual when' tests a string, number, bool or enum.",
+            expect.stringMatching(/^'mode = …': .*Mode/),
+            "A stereotype's visuals apply to every element it's applied to; 'visual when' is for kinds.",
+        ]);
+        expect(by('warning')).toEqual(["Visual 'container' decides how every K is laid out, so 'visual when' can't change it; it's ignored here."]);
+    });
+});

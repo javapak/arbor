@@ -82,8 +82,12 @@ Multiplicity:
     '[' (many?='*' | lower=NUMBER ('..' (upper=NUMBER | many?='*'))?) ']';
 
 // Render hints, passed through the IR to the renderer adapter.
+// `visual when kind = choice { ... }` restyles only the elements whose property has that value
+// (written, or its default), like a stereotype's visuals.
 Visual:
-    'visual' '{' (entries+=VisualEntry)* '}';
+    'visual' ('when' when=VisualCondition)? '{' (entries+=VisualEntry)* '}';
+VisualCondition:
+    feature=FeatureName '=' value=Literal;
 VisualEntry:
     key=FeatureName ':' value=Literal;
 
@@ -150,7 +154,8 @@ FeatureName returns string:
     ID | 'version' | 'kind' | 'model' | 'profile' | 'visual' | 'enum'
        | 'abstract' | 'extends' | 'prop' | 'contains' | 'ref'
        | 'string' | 'int' | 'float' | 'bool'
-       | 'ordered' | 'unique' | 'readonly' | 'derived' | 'opposite' | 'subsets' | 'redefines' | 'datatype' | 'stereotype';
+       | 'ordered' | 'unique' | 'readonly' | 'derived' | 'opposite' | 'subsets' | 'redefines' | 'datatype' | 'stereotype'
+       | 'when';
 
 // ======================================================================
 // Terminals

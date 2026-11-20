@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActionIcon, Group, Menu, Tooltip } from '@mantine/core';
 import { ConnectorRegular, FlowchartRegular, SettingsRegular, ZoomFitRegular } from '@fluentui/react-icons';
 import { InteractionMode, RenderSettingsModal, useDiagram, type LayoutOptions } from 'webgpu-flow';
-import type { LayoutEntry } from '@arbor/adapter-flow';
+import { placedNodes, type LayoutEntry } from '@arbor/adapter-flow';
 import { useDiagramStore } from './store';
 import { post } from './vscode';
 
@@ -30,10 +30,10 @@ export default function Toolbar() {
             await applyLayout(options, { animate: true });
             const { nodes, edges } = serializeDiagram();
             const s = useDiagramStore.getState();
-            // Positions only (sizes stay as the user or the profile set them), and only of top-level
-            // nodes: containers arrange what's inside them.
+            // Positions only (sizes stay as the user or the profile set them), and only of nodes that have
+            // places of their own: containers arrange what's inside them, unless they're free.
             const moved: Record<string, LayoutEntry> = Object.fromEntries(
-                nodes.filter(n => !n.parentId).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
+                placedNodes(nodes).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
             const routed = Object.fromEntries(edges.map(e => [e.id, e.userVertices.length ? e.userVertices : null]));
             s.setLayout(l => ({ ...l, ...moved }));
             s.setEdgeLayout(l => {

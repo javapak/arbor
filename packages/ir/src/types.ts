@@ -40,6 +40,15 @@ export interface IRKind {
     extends: string[];
     features: IRFeature[];
     visual: IRVisual;
+    /** Visuals for the elements whose property `feature` is `value` (written, or by default), in profile order. */
+    visualWhen?: IRConditionalVisual[];
+}
+
+/** `visual when kind = choice { shape: "diamond" }`: restyles elements by a property's value. */
+export interface IRConditionalVisual {
+    feature: string;
+    value: IRScalar;
+    visual: IRVisual;
 }
 
 export type IRFeature = IRProperty | IRContainment | IRReference;

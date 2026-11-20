@@ -14,7 +14,7 @@ import type {
     ContainsFeature, DataTypeDecl, EdgeVisual, Element, Feature, RecordValue, StereotypeDecl, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual, VisualEntry
 } from './generated/ast.js';
 import { isElement, isListValue, isRecordValue, isRefValue } from './generated/ast.js';
-import { EDGE_VISUAL_KEYS, OWNER_END, VISUAL_KEYS, checkVisualValue, type VisualKeySpec } from '@arbor/ir';
+import { EDGE_VISUAL_KEYS, OWNER_END, STRUCTURAL_VISUALS, VISUAL_KEYS, checkVisualValue, type VisualKeySpec } from '@arbor/ir';
 import type { ArborServices } from './arbor-module.js';
 import type { ArborScopeProvider } from './arbor-scope.js';
 import {
@@ -37,6 +37,7 @@ export const DiagnosticCode = {
     BadSubsets: 'ARB010',
     BadRedefines: 'ARB011',
     BadStereotype: 'ARB012',
+    BadVisualCondition: 'ARB013',
     // models
     AbstractInstance: 'ARB101',
     UnknownSlot: 'ARB102',
@@ -292,6 +293,7 @@ export class ArborValidator {
     /** Keys and values come from the IR's renderer-neutral visual vocabulary. Unknown ones are warnings. */
     checkVisual(visual: Visual, accept: ValidationAcceptor): void {
         this.checkVisualEntries(visual.entries, VISUAL_KEYS, accept);
+        if (visual.when) this.checkVisualCondition(visual, accept);
         // An edge kind's ends are references of the kind (or its owner).
         const kind = visual.$container;
         if (kind.$type !== 'Kind') return;   // a stereotype's visuals restyle; they don't make edges
@@ -305,10 +307,42 @@ export class ArborValidator {
                 `Visual '${e.key}': ${kind.name} has no reference '${value}' (or use "${OWNER_END}").${fix ? ` Did you mean '${fix}'?` : ''}`,
                 { node: e, property: 'value', code: DiagnosticCode.BadVisualValue, data: { fix } });
         }
-        const keys = new Set(lineage(kind).flatMap(k => k.visuals.flatMap(v => v.entries.map(e => e.key))));
+        const keys = new Set(lineage(kind).flatMap(k => k.visuals.filter(v => !v.when).flatMap(v => v.entries.map(e => e.key))));
         if (visual === kind.visuals.at(-1) && keys.has('source') !== keys.has('target')) {
             accept('warning', `Visual: an edge kind needs both 'source' and 'target'.`,
                 { node: visual, code: DiagnosticCode.BadVisualValue });
+        }
+    }
+
+    /**
+     * `visual when p = v { ... }`: `p` is a single-valued property of the kind, not a datatype,
+     * `v` fits its type, and the block only restyles, as a stereotype's visuals do.
+     */
+    private checkVisualCondition(visual: Visual, accept: ValidationAcceptor): void {
+        const when = visual.when!;
+        const fail = (message: string, property: 'feature' | 'value', fix?: string) =>
+            accept('error', message, { node: when, property, code: DiagnosticCode.BadVisualCondition, data: { fix } });
+        const kind = visual.$container;
+        if (kind.$type !== 'Kind') {
+            return fail(`A stereotype's visuals apply to every element it's applied to; 'visual when' is for kinds.`, 'feature');
+        }
+        const features = allFeatures(kind);
+        const f = features.get(when.feature);
+        const props = [...features.values()].filter(g => g.$type === 'PropFeature').map(g => g.name);
+        if (!f) {
+            const fix = closest(when.feature, props);
+            return fail(`${kind.name} has no property '${when.feature}'.${fix ? ` Did you mean '${fix}'?` : ''}`, 'feature', fix);
+        }
+        if (f.$type !== 'PropFeature') return fail(`'${when.feature}' is a ${f.$type === 'RefFeature' ? 'reference' : 'containment'}; 'visual when' tests a property's value.`, 'feature');
+        if (bounds(f.multiplicity, f.$type).upper !== 1) return fail(`'${when.feature}' holds several values; 'visual when' tests a property with one.`, 'feature');
+        if (datatypeOf(f)) return fail(`'${when.feature}' holds ${datatypeOf(f)!.name} values; 'visual when' tests a string, number, bool or enum.`, 'feature');
+        const problem = checkLiteral(f, when.value);
+        if (problem) return fail(`'${when.feature} = …': ${problem}.`, 'value');
+        for (const e of visual.entries) {
+            if (STRUCTURAL_VISUALS.has(e.key)) {
+                accept('warning', `Visual '${e.key}' decides how every ${kind.name} is laid out, so 'visual when' can't change it; it's ignored here.`,
+                    { node: e, property: 'key', code: DiagnosticCode.BadVisualCondition });
+            }
         }
     }
 

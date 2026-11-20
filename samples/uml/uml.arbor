@@ -1,6 +1,6 @@
-// A small slice of UML class diagrams: classes with attribute and operation
-// rows, and generalizations, realizations, dependencies and associations
-// drawn as edges, each in its UML notation.
+// A small slice of UML: class diagrams (classes with attribute and operation
+// rows, and generalizations, realizations, dependencies and associations drawn
+// as edges, each in its UML notation) and state machines owned by classes.
 
 profile uml version "0.1.0" {
 
@@ -26,7 +26,12 @@ profile uml version "0.1.0" {
         contains         realizations:    InterfaceRealization [0..*]
     }
 
+    // A class can nest classifiers and own behaviors. A behavior is itself a class,
+    // so a state machine fits both: say which with `ownedBehavior += StateMachine ...`.
     kind Class extends Classifier {
+        contains nestedClassifier:   Classifier [0..*] subsets ownedMembers
+        contains ownedBehavior:      Behavior [0..*] subsets ownedMembers
+        ref      classifierBehavior: Behavior [0..1] { hidden: true }
         visual { shape: "rectangle" color: "#0ea5e9" }
     }
 
@@ -43,13 +48,13 @@ profile uml version "0.1.0" {
         derived ref classifier: Classifier [0..1] opposite attributes
         ref  type:         Classifier [0..1]
         prop multiplicity: string [0..1]
-        visual { member: true  label: "{name} : {type} {multiplicity}" }
+        visual { member: true  label: "{name}{? : {type}}{? [{multiplicity}]}" }
     }
 
     kind Operation extends NamedElement {
         derived ref classifier: Classifier [0..1] opposite operations
         ref returns: Classifier [0..1]
-        visual { member: true  label: "{name}() : {returns}" }
+        visual { member: true  label: "{name}(){? : {returns}}" }
     }
 
     // Relationships: elements drawn as edges. Owned by the specific classifier.
@@ -91,5 +96,66 @@ profile uml version "0.1.0" {
 
     kind Aggregation extends Association {
         visual { sourceMarker: "diamond" }
+    }
+
+    // ------------------------------------------------------------ state machines
+
+    abstract kind Behavior extends Class {}
+
+    // State machines, regions and composite states are drawn as boxes holding
+    // what they contain where it's dragged (a free layout), joined by transitions.
+    kind StateMachine extends Behavior {
+        contains regions: Region [1..*]
+        visual { shape: "roundedRectangle" color: "#a855f7" container: true layout: "free" label: "«stateMachine» {name}" }
+    }
+
+    kind Region extends NamedElement {
+        contains subvertices: Vertex [0..*]
+        contains transitions: Transition [0..*]
+        visual { shape: "rectangle" color: "#e9d5ff" container: true layout: "free" width: 120 height: 60 }
+    }
+
+    // Each vertex knows its transitions: whoever names it as source or target.
+    abstract kind Vertex extends NamedElement {
+        derived ref outgoing: Transition [0..*] opposite source
+        derived ref incoming: Transition [0..*] opposite target
+    }
+
+    kind State extends Vertex {
+        prop entry:      string [0..1]
+        prop exit:       string [0..1]
+        prop doActivity: string [0..1]
+        contains regions: Region [0..*]
+        visual { shape: "roundedRectangle" color: "#c084fc" container: true layout: "free" width: 140 height: 50 }
+    }
+
+    kind FinalState extends State {
+        visual { shape: "finalNode" color: "#1e293b" label: "" width: 30 height: 30 }
+    }
+
+    enum PseudostateKind { initial, choice, junction, fork, join, deepHistory, shallowHistory, entryPoint, exitPoint, terminate }
+
+    // Drawn by its kind, in UML's notation: an initial dot, a choice diamond, a fork or join bar, H for history...
+    kind Pseudostate extends Vertex {
+        prop kind: PseudostateKind = initial
+        visual { shape: "initialNode" color: "#1e293b" label: "" width: 24 height: 24 }
+        visual when kind = choice         { shape: "diamond"  color: "#e9d5ff" width: 32 height: 32 }
+        visual when kind = junction       { width: 14 height: 14 }
+        visual when kind = fork           { shape: "rectangle" width: 80 height: 8 }
+        visual when kind = join           { shape: "rectangle" width: 80 height: 8 }
+        visual when kind = shallowHistory { shape: "circle" color: "#f8fafc" labelColor: "#1e293b" label: "H"  width: 28 height: 28 }
+        visual when kind = deepHistory    { shape: "circle" color: "#f8fafc" labelColor: "#1e293b" label: "H*" width: 28 height: 28 }
+        visual when kind = entryPoint     { shape: "circle" color: "#f8fafc" width: 18 height: 18 }
+        visual when kind = exitPoint      { shape: "circle" color: "#f8fafc" labelColor: "#1e293b" label: "×" width: 18 height: 18 }
+        visual when kind = terminate      { shape: "none" labelColor: "#1e293b" label: "×" width: 24 height: 24 }
+    }
+
+    kind Transition extends NamedElement {
+        ref  source:  Vertex [1]
+        ref  target:  Vertex [1]
+        prop trigger: string [0..1]
+        prop guard:   string [0..1]
+        prop effect:  string [0..1]
+        visual { source: "source" target: "target" targetMarker: "arrow" label: "{trigger}{? [{guard}]}{? / {effect}}" }
     }
 }

@@ -8,8 +8,11 @@ export function displayName(element: IRElement): string {
     return element.name || `:${element.kind.split('.').pop()}`;
 }
 
-/** Visual keys that decide how an element is laid out rather than styled; stereotypes can't change them. */
-const STRUCTURAL_VISUALS = new Set(['container', 'member', 'source', 'target']);
+/**
+ * Visual keys that decide how an element is laid out rather than styled: stereotypes and
+ * `visual when` blocks can't change them, since they'd make elements of one kind lay out differently.
+ */
+export const STRUCTURAL_VISUALS: ReadonlySet<string> = new Set(['container', 'layout', 'member', 'source', 'target']);
 
 /**
  * Read helpers for consumers. Interpreted against the profile data at runtime:
@@ -79,11 +82,19 @@ export class IRIndex {
     }
 
     /**
-     * An element's visuals: its kind's, restyled by its stereotypes', the last applied winning.
-     * How it is drawn structurally (nested, as a row, as an edge) stays its kind's.
+     * An element's visuals: its kind's, restyled by the kind's `visual when` blocks its
+     * properties match (inherited ones first, then in profile order), then by its stereotypes',
+     * the last applied winning. How it is drawn structurally (nested, as a row, as an edge)
+     * stays its kind's.
      */
     elementVisual(element: IRElement): Record<string, string | number | boolean> {
         const merged = this.visual(element.kind);
+        for (const k of [...this.lineage(element.kind)].reverse()) {
+            for (const c of k.visualWhen ?? []) {
+                if (this.get(element, c.feature) !== c.value) continue;
+                for (const [key, value] of Object.entries(c.visual)) if (!STRUCTURAL_VISUALS.has(key)) merged[key] = value;
+            }
+        }
         for (const id of element.stereotypes ?? []) {
             for (const [key, value] of Object.entries(this.stereotypes.get(id)?.visual ?? {})) {
                 if (!STRUCTURAL_VISUALS.has(key)) merged[key] = value;

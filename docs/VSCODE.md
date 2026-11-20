@@ -92,6 +92,11 @@ attributes:
 - A container arranges its contents in the text's order, in columns of up to 8
   rows, and sizes itself to hold them. It has no resize handles, and its
   contents have no positions in the view file.
+- A **free** container (its kind sets `layout: "free"`) leaves its contents
+  where you put them instead: each keeps its own shape and size, can be dragged
+  and resized, and has a position in the view file, like a top-level node. The
+  container can be resized too, and grows to hold whatever it contains.
+  Contents with no position yet start on a grid inside it.
 
 **Edges.** References are arrows, labelled with the reference's name. An edge
 meets a row at its left or right end, whichever faces the other node. Where
@@ -104,7 +109,8 @@ it.
 
 **Moving.** Dragging a top-level node moves it; dragging a container moves its
 contents with it. An element inside a container goes back where it was when you
-let go: its container decides where it goes. (Moving an element to another
+let go: its container decides where it goes. In a free container it stays where
+you drop it, and the container grows to hold it. (Moving an element to another
 container, or reordering it, by dragging is planned.)
 
 ## Properties view

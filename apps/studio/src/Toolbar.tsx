@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActionIcon, Group, Menu, Tooltip } from '@mantine/core';
 import { ConnectorRegular, FlowchartRegular, SettingsRegular, ZoomFitRegular } from '@fluentui/react-icons';
 import { InteractionMode, RenderSettingsModal, useDiagram, type LayoutOptions } from 'webgpu-flow';
-import type { LayoutEntry } from '@arbor/adapter-flow';
+import { placedNodes, type LayoutEntry } from '@arbor/adapter-flow';
 import { useStudio } from './store';
 
 const LAYOUTS: Array<{ label: string; options: Partial<LayoutOptions> }> = [
@@ -28,9 +28,9 @@ export default function Toolbar() {
       await applyLayout(options, { animate: true });
       const { nodes, edges } = serializeDiagram();
       const s = useStudio.getState();
-      // Positions only, and only of top-level nodes: containers arrange what's inside them.
+      // Positions only, and only of nodes with places of their own: containers arrange what's inside them, unless they're free.
       const moved: Record<string, LayoutEntry> = Object.fromEntries(
-        nodes.filter(n => !n.parentId).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
+        placedNodes(nodes).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
       s.setLayout(l => ({ ...l, ...moved }));
       s.setEdgeLayout(l => {
         const next = { ...l };

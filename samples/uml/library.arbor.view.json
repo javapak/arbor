@@ -4,35 +4,35 @@
   "model": "library.arbor",
   "nodes": {
     "library.Book": {
-      "x": -200,
-      "y": -250
+      "x": -350,
+      "y": -350
     },
     "library.Date": {
-      "x": -570,
-      "y": 390
+      "x": 530,
+      "y": -360
     },
     "library.Disc": {
-      "x": 50,
-      "y": -250
+      "x": -500,
+      "y": -150
     },
     "library.Item": {
-      "x": -500,
-      "y": 25
+      "x": -250,
+      "y": -75
     },
     "library.Lendable": {
-      "x": -500,
-      "y": 250
+      "x": 50,
+      "y": 50
     },
     "library.Library": {
-      "x": 350,
-      "y": -250
+      "x": -450,
+      "y": 100
     },
     "library.Member": {
-      "x": -500,
-      "y": -250
+      "x": -250,
+      "y": 350
     },
     "library.String": {
-      "x": 580,
+      "x": 280,
       "y": -360
     }
   },
@@ -40,37 +40,31 @@
     "library.Book.Generalization#1": [
       {
         "x": -200,
-        "y": 25
+        "y": -350
       }
     ],
     "library.Disc.Generalization#1": [
       {
-        "x": 50,
-        "y": -64
-      },
-      {
         "x": -500,
-        "y": -64
+        "y": -50
+      }
+    ],
+    "library.Item.InterfaceRealization#1": [
+      {
+        "x": 50,
+        "y": -75
       }
     ],
     "library.borrows": [
       {
-        "x": -750,
-        "y": -250
-      },
-      {
-        "x": -750,
-        "y": 250
+        "x": 50,
+        "y": 300
       }
     ],
     "library.holdings": [
       {
-        "x": 350,
-        "y": -100
-      },
-      {
-        "x": 350,
-        "y": 50
+        "x": -200,
+        "y": 100
       }
     ]
   }
