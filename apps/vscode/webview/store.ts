@@ -24,12 +24,15 @@ export interface DiagramState {
     dark: boolean;
     /** The layout worker is loaded (see main.tsx). */
     layoutReady: boolean;
+    /** The element whose own diagram is open (a state machine, say), or null for the model's. */
+    root: string | null;
 
     setLayout: (update: (layout: Layout) => Layout) => void;
     setEdgeLayout: (update: (layout: EdgeLayout) => EdgeLayout) => void;
     setNotice: (notice: string | null) => void;
     resync: () => void;
     setPendingSelect: (id: string | null) => void;
+    setRoot: (root: string | null) => void;
     receive: (m: HostMessage) => void;
 }
 
@@ -45,12 +48,14 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     pendingSelect: null,
     dark: true,
     layoutReady: false,
+    root: null,
 
     setLayout: (update) => set(s => ({ layout: update(s.layout) })),
     setEdgeLayout: (update) => set(s => ({ edgeLayout: update(s.edgeLayout) })),
     setNotice: (notice) => set({ notice }),
     resync: () => set(s => ({ resyncRequest: s.resyncRequest + 1 })),
     setPendingSelect: (pendingSelect) => set({ pendingSelect }),
+    setRoot: (root) => set({ root }),
     receive: (m) => {
         switch (m.type) {
             case 'model':

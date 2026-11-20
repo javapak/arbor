@@ -75,6 +75,8 @@ export interface FlowNode {
         /** Owning element's ID, however containment is drawn. */
         parentId: string | null;
         properties: IRElement['properties'];
+        /** The element has a diagram of its own, opened by passing its ID as `root` (double-click). */
+        opens?: true;
     };
     visual: {
         shape: Shape;
@@ -160,6 +162,12 @@ export interface FlowOptions {
     palette?: boolean;
     /** The editor's snap grid: elements placed automatically get their top-left corner on it. */
     grid?: number;
+    /**
+     * Draw this element's own diagram (its kind sets `diagram: true`): the element as a frame
+     * holding what it contains. Without it, the model's diagram, where such elements are one node each.
+     * See `diagramOf` and `diagramPath`.
+     */
+    root?: string;
 }
 
 const REFERENCE_STYLE: FlowEdge['style'] = { color: [0.39, 0.45, 0.55, 1], thickness: 2, targetMarker: 'open-arrow' };
@@ -179,17 +187,19 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
         edges.push({ id, sourceNodeId: source, targetNodeId: target, userVertices: edgeLayout[id] ?? [], style, data: { ...data, relation } });
 
     const asEdges = edgeElements(doc, index);
-    const drawn = (id: string) => !asEdges.edges.has(id) && !asEdges.hidden.has(id);
-    const nestedIn = containerOf(index);
+    const view = diagramView(index, opts.root);
+    const drawn = (id: string) => view.has(id) && !asEdges.edges.has(id) && !asEdges.hidden.has(id);
+    const nestedIn = (el: IRElement) => (el.id === opts.root ? undefined : containerOf(index)(el));
     const compartments = new Map(doc.models.flatMap(m => m.elements).map(el => [el.id, propertyLines(el, index)]));
-    const boxes = placeElements(doc, layout, index, defaultSize, nestedIn, compartments, drawn, opts.grid);
+    const boxes = placeElements(doc, frameLayout(layout, index, opts.root, drawn), index, defaultSize, nestedIn, compartments, drawn,
+        view.collapsed, opts.grid);
     for (const model of doc.models) {
         for (const el of model.elements) {
             const v = index.elementVisual(el);
             // Applied stereotypes go before the label, as in UML: «Entity» Customer.
             const stereotyped = (label: string) => [index.stereotypeLabel(el), label].filter(Boolean).join(' ');
             const ends = asEdges.edges.get(el.id);
-            if (ends) {
+            if (ends && view.has(el.id) && drawn(ends.source) && drawn(ends.target)) {
                 edge(el.id, ends.source, ends.target, 'element', edgeStyle(v, REFERENCE_STYLE), {
                     label: stereotyped(typeof v.label === 'string' ? labelFor(el, v.label, index) : el.name),
                     ...endLabels(v, t => labelFor(el, t, index))
@@ -211,12 +221,13 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                     kind: el.kind,
                     name: el.name,
                     parentId: el.parent,
-                    properties: el.properties
+                    properties: el.properties,
+                    ...(view.collapsed(el) ? { opens: true as const } : {})
                 },
                 visual: {
                     ...kindVisual(v, size, contentSize),
-                    container: v.container === true,
-                    ...(isFreeVisual(v) ? { layout: 'free' as const } : {}),
+                    container: v.container === true && !view.collapsed(el),
+                    ...(isFreeVisual(v) && !view.collapsed(el) ? { layout: 'free' as const } : {}),
                     // A member's kind is clear from where it is (every row in an Entity is a Column).
                     ...(boxes.isRow(el)
                         ? { presentation: 'row' as const, ...(el.stereotypes?.length ? { detail: index.stereotypeLabel(el) }
@@ -238,7 +249,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                     edge(`${el.id}--${feature}->${t}`, el.id, t, 'reference', edgeStyle(edgeVisual(f), REFERENCE_STYLE), featureLabels(feature, f));
                 }
             }
-            if (mode === 'edges' && el.parent && !owner) {
+            if (mode === 'edges' && el.parent && !owner && drawn(el.parent) && el.id !== opts.root) {
                 const feature = el.containedIn ?? 'contains';
                 const parent = index.elements.get(el.parent);
                 const contains = parent && index.features(parent.kind).find(c => c.name === feature);
@@ -426,15 +437,82 @@ const MAX_LINE = 32;
 type Box = { x: number; y: number; width: number; height: number };
 type Size = { width: number; height: number };
 
+// ------------------------------------------------------------ diagrams of their own
+
+/** Whether elements of the element's kind have diagrams of their own (`diagram: true`). */
+function opensDiagram(index: IRIndex, el: IRElement): boolean {
+    return index.visual(el.kind).diagram === true;
+}
+
+/**
+ * The diagram an element is drawn in: the nearest element around it with a
+ * diagram of its own, or null for the model's. An element with a diagram of
+ * its own is drawn, as one node, in the one around it.
+ */
+export function diagramOf(doc: IRDocument, id: string): string | null {
+    return diagramAround(new IRIndex(doc), id);
+}
+
+function diagramAround(index: IRIndex, id: string): string | null {
+    for (let p = index.elements.get(id)?.parent; p; p = index.elements.get(p)?.parent ?? null) {
+        const owner = index.elements.get(p);
+        if (owner && opensDiagram(index, owner)) return owner.id;
+    }
+    return null;
+}
+
+/**
+ * The diagrams from the model's to `root`'s, outermost first, for a breadcrumb:
+ * `[]` for the model's, then each element whose diagram holds the next.
+ */
+export function diagramPath(doc: IRDocument, root: string | null | undefined): IRElement[] {
+    const index = new IRIndex(doc);
+    const out: IRElement[] = [];
+    for (let id = root ?? null; id; id = diagramAround(index, id)) {
+        const el = index.elements.get(id);
+        if (!el) return [];
+        out.unshift(el);
+    }
+    return out;
+}
+
+/** What one diagram draws: `root` and what's in its diagram, or the model's diagram. */
+function diagramView(index: IRIndex, root: string | undefined): { has(id: string): boolean; collapsed(el: IRElement): boolean } {
+    const ids = new Set<string>();
+    for (const el of index.elements.values()) {
+        if (el.id === root || diagramAround(index, el.id) === (root ?? null)) ids.add(el.id);
+    }
+    return {
+        has: id => ids.has(id),
+        collapsed: el => el.id !== root && opensDiagram(index, el),
+    };
+}
+
+/**
+ * The layout for a diagram of its own: the frame isn't stored (its node in the
+ * diagram around it is), so it goes where what it holds is, and grows to hold it.
+ */
+function frameLayout(layout: Layout, index: IRIndex, root: string | undefined, drawn: (id: string) => boolean): Layout {
+    if (!root) return layout;
+    const { [root]: _outer, ...rest } = layout;
+    void _outer;
+    const placed = Object.entries(rest).filter(([id]) => id !== root && drawn(id) && index.elements.has(id)).map(([, e]) => e);
+    if (!placed.length) return rest;
+    const xs = placed.map(e => e.x), ys = placed.map(e => e.y);
+    return { ...rest, [root]: { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 } };
+}
+
 /**
  * The nodes whose positions belong in the layout: top-level ones, and those in
  * a free container, which leaves them where they are. Other containers place
- * what's inside them. Takes the renderer's nodes, or this adapter's.
+ * what's inside them, and a diagram's frame (`root`) is placed by what it holds.
+ * Takes the renderer's nodes, or this adapter's.
  */
-export function placedNodes<N extends { id: string; parentId?: string; visual?: object }>(nodes: readonly N[]): N[] {
+export function placedNodes<N extends { id: string; parentId?: string; visual?: object }>(nodes: readonly N[], root?: string | null): N[] {
     const byId = new Map(nodes.map(n => [n.id, n]));
     const free = (n: N | undefined) => (n?.visual as { layout?: unknown } | undefined)?.layout === 'free';
-    return nodes.filter(n => !n.parentId || free(byId.get(n.parentId)));
+    // A diagram's frame has its place in the diagram around it, not this one.
+    return nodes.filter(n => n.id !== root && (!n.parentId || free(byId.get(n.parentId))));
 }
 
 /** A container whose contents keep their own places, like nodes on the canvas (see webgpu-flow's utils/Nesting). */
@@ -487,7 +565,7 @@ function containerOf(index: IRIndex): (el: IRElement) => string | undefined {
 function placeElements(
     doc: IRDocument, layout: Layout, index: IRIndex, size: Size,
     nestedIn: (el: IRElement) => string | undefined, compartments: Map<string, string[]>, drawn: (id: string) => boolean,
-    grid?: number
+    collapsed: (el: IRElement) => boolean, grid?: number
 ): Map<string, Box> & { isRow(el: IRElement): boolean } {
     const elements = doc.models.flatMap(m => m.elements).filter(el => drawn(el.id));
     const children = new Map<string, IRElement[]>();
@@ -496,7 +574,8 @@ function placeElements(
         if (owner) children.set(owner, [...(children.get(owner) ?? []), el]);
     }
 
-    const free = (el: IRElement) => isFreeVisual(index.visual(el.kind));
+    // A diagram drawn as one node holds nothing here.
+    const free = (el: IRElement) => isFreeVisual(index.visual(el.kind)) && !collapsed(el);
     const ownerOf = (el: IRElement) => {
         const owner = nestedIn(el);
         return owner ? index.elements.get(owner) : undefined;
@@ -526,7 +605,7 @@ function placeElements(
                 width: Math.max(entry?.width ?? base.width, Math.max(textWidth, grid.extent.width) + 2 * NEST_PADDING),
                 height: Math.max(entry?.height ?? base.height, above + (homeless.length ? grid.extent.height + 2 * NEST_PADDING : lines.length ? NEST_PADDING : 0))
             };
-        } else if (!isRow(el) && (kids.length || lines.length || index.visual(el.kind).container === true)) {
+        } else if (!isRow(el) && (kids.length || lines.length || (index.visual(el.kind).container === true && !collapsed(el)))) {
             const extent = kids.length ? columnsExtent(kids.map(measure)) : { width: 0, height: 0 };
             const text = lines.length ? lines.length * LINE_HEIGHT + (kids.length ? SECTION_GAP : 0) : 0;
             const textWidth = Math.max(0, ...lines.map(l => l.length * CHAR_WIDTH + 2 * ROW_INSET));

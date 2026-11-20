@@ -106,7 +106,7 @@ profile uml version "0.1.0" {
     // what they contain where it's dragged (a free layout), joined by transitions.
     kind StateMachine extends Behavior {
         contains regions: Region [1..*]
-        visual { shape: "roundedRectangle" color: "#a855f7" container: true layout: "free" label: "«stateMachine» {name}" }
+        visual { shape: "roundedRectangle" color: "#a855f7" container: true layout: "free" diagram: true label: "«stateMachine» {name}" }
     }
 
     kind Region extends NamedElement {
@@ -139,7 +139,7 @@ profile uml version "0.1.0" {
     kind Pseudostate extends Vertex {
         prop kind: PseudostateKind = initial
         visual { shape: "initialNode" color: "#1e293b" label: "" width: 24 height: 24 }
-        visual when kind = choice         { shape: "diamond"  color: "#e9d5ff" width: 32 height: 32 }
+        visual when kind = choice         { shape: "diamond"  color: "rgb(134, 255, 249)" width: 32 height: 32 }
         visual when kind = junction       { width: 14 height: 14 }
         visual when kind = fork           { shape: "rectangle" width: 80 height: 8 }
         visual when kind = join           { shape: "rectangle" width: 80 height: 8 }

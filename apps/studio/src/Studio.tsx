@@ -6,10 +6,11 @@ import { useStudio } from './store';
 import { handleEdit } from './diagramEdits';
 import Editor from './Editor';
 import DiagramPane from './DiagramPane';
+import DiagramTrail from './DiagramTrail';
 import Toolbar from './Toolbar';
 
 export default function Studio() {
-  const { files, active, diagnostics, notice, setFile, setActive, setNotice, reset } = useStudio();
+  const { files, active, diagnostics, notice, setFile, setActive, setNotice, reset, ir, root, setRoot } = useStudio();
   const [reveal, setReveal] = useState<{ line: number; column: number; n: number }>();
   const errors = diagnostics.filter(d => d.severity === 'error').length;
 
@@ -75,6 +76,9 @@ export default function Studio() {
               <div style={{ position: 'relative', height: '100%' }}>
                 <DiagramPane />
                 <Toolbar />
+                <div style={{ position: 'absolute', top: 12, left: 12 }}>
+                  <DiagramTrail ir={ir} root={root} open={setRoot} />
+                </div>
                 {notice && (
                   <Group gap={6} wrap="nowrap" style={{
                     position: 'absolute', left: 12, right: 12, bottom: 12, padding: '6px 10px', borderRadius: 8,

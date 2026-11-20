@@ -30,7 +30,7 @@ export default function Toolbar() {
       const s = useStudio.getState();
       // Positions only, and only of nodes with places of their own: containers arrange what's inside them, unless they're free.
       const moved: Record<string, LayoutEntry> = Object.fromEntries(
-        placedNodes(nodes).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
+        placedNodes(nodes, s.root).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
       s.setLayout(l => ({ ...l, ...moved }));
       s.setEdgeLayout(l => {
         const next = { ...l };

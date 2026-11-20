@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { DiagramCanvas, useDiagram, useRenderSettings } from 'webgpu-flow';
-import { toFlowGraph } from '@arbor/adapter-flow';
+import { diagramOf, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
 import { useDiagramStore } from './store';
 import { post } from './vscode';
 
@@ -21,6 +21,7 @@ export default function DiagramPane() {
     const viewRevision = useDiagramStore(s => s.viewRevision);
     const resyncRequest = useDiagramStore(s => s.resyncRequest);
     const pendingSelect = useDiagramStore(s => s.pendingSelect);
+    const root = useDiagramStore(s => s.root);
     const resolution = useRenderSettings(s => s.resolution);
     const container = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 0, height: 0 });
@@ -30,24 +31,36 @@ export default function DiagramPane() {
     const reported = selected.current ?? pendingSelect;
     useEffect(() => post({ type: 'selection', id: reported }), [reported]);
 
+    // Opening another diagram shows all of it.
+    const shownRoot = useRef(root);
+    if (shownRoot.current !== root) { shownRoot.current = root; fitPending.current = true; }
+
     useEffect(() => {
         if (!ir) return;
-        const { layout, edgeLayout, setLayout, pendingSelect, setPendingSelect } = useDiagramStore.getState();
-        const graph = toFlowGraph(ir, { layout, edgeLayout, grid: grid.current });
+        const { layout, edgeLayout, setLayout, pendingSelect, setPendingSelect, setRoot } = useDiagramStore.getState();
+        const exists = (id: string | null) => !!id && ir.models.some(m => m.elements.some(e => e.id === id));
+        // The open diagram's element was removed or renamed: back to the model's.
+        if (root && !exists(root)) { setRoot(null); return; }
+        const graph = toFlowGraph(ir, { layout, edgeLayout, grid: grid.current, root: root ?? undefined });
         // Redraws clear the selection; keep the selected element (and its properties panel) across them.
         const has = (id: string | null) => !!id && graph.nodes.some(n => n.id === id);
+        // An element to select that's in another diagram (revealed from a tree view, say): open that one.
+        if (pendingSelect && !has(pendingSelect) && exists(pendingSelect) && diagramOf(ir, pendingSelect) !== root) {
+            setRoot(diagramOf(ir, pendingSelect));
+            return;
+        }
         // A pending element not drawn yet (just added, its text edit still on the way) stays pending.
         if (!has(pendingSelect) && has(selected.current)) setPendingSelect(selected.current);
         // Pin auto-placed nodes, so adding an element doesn't reshuffle the others. Nodes inside a
-        // container are arranged by it and have no place of their own.
-        const placed = graph.nodes.filter(n => !layout[n.id] && !n.parentId);
+        // container are arranged by it and have no place of their own, unless it's a free one.
+        const placed = placedNodes(graph.nodes, root).filter(n => !layout[n.id]);
         if (placed.length) {
             const entries = Object.fromEntries(placed.map(n => [n.id, { ...n.data.position }]));
             setLayout(l => ({ ...l, ...entries }));
             post({ type: 'layout', nodes: entries });
         }
         loadDiagram(graph);
-    }, [ir, viewRevision, resyncRequest, loadDiagram]);
+    }, [ir, viewRevision, resyncRequest, root, loadDiagram]);
 
     // Fit the first diagram once it is committed (the provider syncs its state after this effect).
     useEffect(() => {
@@ -78,7 +91,8 @@ export default function DiagramPane() {
         <div ref={container} tabIndex={-1} onPointerDown={() => container.current?.focus({ preventScroll: true })}
             style={{ width: '100%', height: '100%', overflow: 'hidden', background: 'var(--vscode-editor-background)', outline: 'none' }}>
             {size.width > 0 && (
-                <DiagramCanvas width={size.width} height={size.height} resolution={resolution} setSupportedSampleCount={noop} />
+                <DiagramCanvas width={size.width} height={size.height} resolution={resolution} setSupportedSampleCount={noop}
+                    onNodeDoubleClick={node => { if (node.data?.opens) useDiagramStore.getState().setRoot(node.id); }} />
             )}
         </div>
     );

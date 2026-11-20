@@ -107,6 +107,12 @@ cross, the more horizontal one hops over the other with a small arc, so a
 crossing never looks like a junction. Edges leaving a container are drawn over
 it.
 
+**Opening.** An element whose kind has a diagram of its own (`diagram: true`, like a UML
+state machine) is drawn as one node. Double-click it to open its diagram: the element
+framing what it contains, and nothing else. A bar at the top left shows where you are, as
+`model › Lifecycle`; its back button, or any name in it, goes back. Revealing an element
+from a tree view opens the diagram it's in.
+
 **Moving.** Dragging a top-level node moves it; dragging a container moves its
 contents with it. An element inside a container goes back where it was when you
 let go: its container decides where it goes. In a free container it stays where

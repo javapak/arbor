@@ -10,6 +10,8 @@ import { sources, useStudio } from './store';
  */
 export function handleEdit(edit: DiagramEdit): void {
   const s = useStudio.getState();
+  // A diagram's frame goes where what it holds is; its place is its node's in the diagram around it.
+  if ((edit.kind === 'node-moved' || edit.kind === 'node-resized') && edit.nodeId === s.root) return;
   switch (edit.kind) {
     case 'node-moved':
       s.setLayout(l => ({ ...l, [edit.nodeId]: { ...l[edit.nodeId], ...edit.to } }));

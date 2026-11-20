@@ -29,7 +29,7 @@
     },
     "library.Member": {
       "x": -250,
-      "y": 350
+      "y": 300
     },
     "library.String": {
       "x": 280,
@@ -52,7 +52,7 @@
     "library.Item.InterfaceRealization#1": [
       {
         "x": 50,
-        "y": -75
+        "y": -100
       }
     ],
     "library.borrows": [

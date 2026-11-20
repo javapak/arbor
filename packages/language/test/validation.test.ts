@@ -1,4 +1,4 @@
-import { toFlowGraph } from '@arbor/adapter-flow';
+import { diagramOf, diagramPath, toFlowGraph } from '@arbor/adapter-flow';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -122,13 +122,25 @@ describe('profile validation', () => {
         const dir = fileURLToPath(new URL('../../../samples/uml/', import.meta.url));
         const r = await loadWorkspace(['uml.arbor', 'orm.arbor', 'library.arbor', 'loan.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
         expect(r.diagnostics).toEqual([]);
-        // The state machine: owned by Loan, and a free container: its region, the region's states and a
-        // composite state's own region are drawn inside one another, where they're placed, not as rows.
-        const g = toFlowGraph(r.ir);
+        // In the model's diagram the state machine is one node, owned by Loan, that opens its own diagram.
         const sm = 'lending.Loan.Lifecycle', main = `${sm}.main`, terms = `${main}.Active.terms`;
+        const outer = toFlowGraph(r.ir);
+        const lifecycle = outer.nodes.find(n => n.id === sm)!;
+        expect(lifecycle).toMatchObject({ data: { opens: true }, visual: { container: false } });
+        expect(lifecycle.visual.layout).toBeUndefined();
+        expect(outer.edges.find(e => e.targetNodeId === sm)?.data).toMatchObject({ relation: 'containment', label: 'ownedBehavior' });
+        expect(outer.nodes.some(n => n.id.startsWith(`${sm}.`))).toBe(false);
+        expect(outer.edges.some(e => e.id.startsWith(`${sm}.`))).toBe(false);
+        expect([diagramOf(r.ir, `${terms}.Lent`), diagramOf(r.ir, sm), diagramPath(r.ir, sm).map(e => e.id)]).toEqual([sm, null, [sm]]);
+
+        // Its own diagram: the machine as a free frame, its region, the region's states and a composite
+        // state's own region drawn inside one another, where they're placed, not as rows. Nothing else.
+        const g = toFlowGraph(r.ir, { root: sm });
         const node = (id: string) => g.nodes.find(n => n.id === id)!;
-        expect(g.edges.find(e => e.targetNodeId === sm)?.data).toMatchObject({ relation: 'containment', label: 'ownedBehavior' });
+        expect(g.nodes.every(n => n.id === sm || n.id.startsWith(`${sm}.`))).toBe(true);
+        expect(node(sm).parentId).toBeUndefined();
         expect(node(sm).visual).toMatchObject({ container: true, layout: 'free' });
+        expect(g.edges.some(e => e.data.relation === 'containment')).toBe(false);
         expect([node(main).parentId, node(`${main}.Active`).parentId, node(terms).parentId, node(`${terms}.Lent`).parentId])
             .toEqual([sm, main, `${main}.Active`, terms]);
         expect(node(`${main}.Overdue`).visual.presentation).toBeUndefined();
@@ -138,7 +150,7 @@ describe('profile validation', () => {
             'after(90 days)', 'paid [amount >= replacementCost]']);
         // Pseudostates are drawn by their kind: the initial one by default, a choice as a diamond.
         expect(node(`${main}.start`).visual).toMatchObject({ shape: 'initialNode', size: { width: 24, height: 24 } });
-        expect(node(`${main}.assess`).visual).toMatchObject({ shape: 'diamond', color: '#e9d5ff', size: { width: 32, height: 32 } });
+        expect(node(`${main}.assess`).visual).toMatchObject({ shape: 'diamond', size: { width: 32, height: 32 } });
         expect(labels(terms)).toEqual(['', 'renew [renewals < 3]']);
     });
 

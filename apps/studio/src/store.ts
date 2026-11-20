@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Layout, EdgeLayout } from '@arbor/adapter-flow';
 import type { StructuredDiagnostic, TextEdit } from '@arbor/language';
+import type { IRDocument } from '@arbor/ir';
 import { applyEdit } from '@arbor/language';
 import software from '../../../examples/software.arbor?raw';
 import persistence from '../../../examples/persistence.arbor?raw';
@@ -23,6 +24,10 @@ export interface StudioState {
   resyncRequest: number;
   /** Element to select once the next redraw has it (redraws clear the selection). */
   pendingSelect: string | null;
+  /** The model as last drawn. */
+  ir: IRDocument | null;
+  /** The element whose own diagram is open (a state machine, say), or null for the model's. */
+  root: string | null;
 
   setFile: (uri: string, text: string) => void;
   applyTextEdit: (edit: TextEdit) => void;
@@ -33,6 +38,8 @@ export interface StudioState {
   setNotice: (notice: string | null) => void;
   resync: () => void;
   setPendingSelect: (id: string | null) => void;
+  setIR: (ir: IRDocument) => void;
+  setRoot: (root: string | null) => void;
   reset: () => void;
 }
 
@@ -61,6 +68,8 @@ export const useStudio = create<StudioState>((set) => ({
   notice: null,
   resyncRequest: 0,
   pendingSelect: null,
+  ir: null,
+  root: null,
 
   setFile: (uri, text) => set(s => ({ files: { ...s.files, [uri]: text } })),
   applyTextEdit: (edit) => set(s => ({ files: { ...s.files, [edit.uri]: applyEdit(s.files[edit.uri] ?? '', edit) } })),
@@ -71,7 +80,9 @@ export const useStudio = create<StudioState>((set) => ({
   setNotice: (notice) => set({ notice }),
   resync: () => set(s => ({ resyncRequest: s.resyncRequest + 1 })),
   setPendingSelect: (pendingSelect) => set({ pendingSelect }),
-  reset: () => set({ files: EXAMPLES, active: 'shop.arbor', layout: {}, edgeLayout: {}, notice: null }),
+  setIR: (ir) => set({ ir }),
+  setRoot: (root) => set({ root }),
+  reset: () => set({ files: EXAMPLES, active: 'shop.arbor', layout: {}, edgeLayout: {}, notice: null, root: null }),
 }));
 
 // Autosave. Browser storage is per-browser and may be unavailable; the studio works without it.

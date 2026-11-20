@@ -33,7 +33,7 @@ export default function Toolbar() {
             // Positions only (sizes stay as the user or the profile set them), and only of nodes that have
             // places of their own: containers arrange what's inside them, unless they're free.
             const moved: Record<string, LayoutEntry> = Object.fromEntries(
-                placedNodes(nodes).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
+                placedNodes(nodes, s.root).map(n => [n.id, { ...s.layout[n.id], ...n.data.position }]));
             const routed = Object.fromEntries(edges.map(e => [e.id, e.userVertices.length ? e.userVertices : null]));
             s.setLayout(l => ({ ...l, ...moved }));
             s.setEdgeLayout(l => {

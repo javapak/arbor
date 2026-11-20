@@ -5,9 +5,10 @@ import { useDiagramStore } from './store';
 import { handleEdit } from './diagramEdits';
 import DiagramPane from './DiagramPane';
 import Toolbar from './Toolbar';
+import DiagramTrail from './DiagramTrail';
 
 export default function App() {
-    const { kind, errors, notice, setNotice, ir } = useDiagramStore();
+    const { kind, errors, notice, setNotice, ir, root, setRoot } = useDiagramStore();
     if (ir && kind !== 'model') {
         return (
             <Text p="md" c="dimmed">
@@ -24,11 +25,14 @@ export default function App() {
                     <div style={{ position: 'relative', height: '100%' }}>
                         <DiagramPane />
                         <Toolbar />
-                        {errors > 0 && (
-                            <Badge color="red" variant="light" style={{ position: 'absolute', top: 12, left: 12 }}>
-                                {errors} error{errors > 1 ? 's' : ''} in the text
-                            </Badge>
-                        )}
+                        <Group gap={8} wrap="nowrap" style={{ position: 'absolute', top: 12, left: 12 }}>
+                            <DiagramTrail ir={ir} root={root} open={setRoot} />
+                            {errors > 0 && (
+                                <Badge color="red" variant="light">
+                                    {errors} error{errors > 1 ? 's' : ''} in the text
+                                </Badge>
+                            )}
+                        </Group>
                         {notice && (
                             <Group gap={6} wrap="nowrap" style={{
                                 position: 'absolute', left: 12, right: 12, bottom: 12, padding: '6px 10px', borderRadius: 8,

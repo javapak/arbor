@@ -2,7 +2,7 @@ import { Validator } from '@cfworker/json-schema';   // interprets schemas; no c
 import { describe, expect, it } from 'vitest';
 import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import schema from '../../ir/schema/ir.schema.json' with { type: 'json' };
-import { placedNodes, toFlowGraph } from '@arbor/adapter-flow';
+import { diagramOf, diagramPath, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
 import { EmptyFileSystem, URI } from 'langium';
 import { loadWorkspace } from '../src/cli/load.js';
 import { toIR } from '../src/ir/ast-to-ir.js';
@@ -368,5 +368,52 @@ describe('free containers', () => {
     it('is a visual key the profile is checked against', async () => {
         const r = await loadWorkspace([{ uri: 'f.arbor', text: 'profile g { kind K { visual { container: true  layout: "loose" } } }' }]);
         expect(r.diagnostics.find(d => d.code === 'ARB008')?.message).toMatch(/layout.*rows, free/);
+    });
+});
+
+describe('diagrams of their own', () => {
+    const profile = `profile d {
+        kind Thing { contains machines: Machine [0..*] }
+        kind Machine {
+            contains states: Step [0..*]
+            contains inner: Machine [0..*]
+            visual { container: true  layout: "free"  diagram: true }
+        }
+        kind Step { ref next: Step [0..1] }
+    }`;
+    const model = `model m { Thing t {
+        Machine run {
+            Step a { next: -> b }  Step b {}
+            Machine sub { Step deep {} }
+        }
+    } }`;
+    const load = () => loadWorkspace([{ uri: 'd.arbor', text: profile }, { uri: 'm.arbor', text: model }]);
+
+    it('are drawn as one node in the diagram around them, and open to show what they hold', async () => {
+        const r = await load();
+        expect(r.diagnostics).toEqual([]);
+        const ids = (root?: string) => toFlowGraph(r.ir, { root }).nodes.map(n => n.id);
+        expect(ids()).toEqual(['m.t', 'm.t.run']);
+        expect(ids('m.t.run')).toEqual(['m.t.run', 'm.t.run.a', 'm.t.run.b', 'm.t.run.sub']);
+        expect(ids('m.t.run.sub')).toEqual(['m.t.run.sub', 'm.t.run.sub.deep']);
+        const inner = toFlowGraph(r.ir, { root: 'm.t.run' });
+        expect(inner.nodes.find(n => n.id === 'm.t.run.sub')!.data.opens).toBe(true);
+        expect(inner.edges.map(e => e.id)).toEqual(['m.t.run.a--next->m.t.run.b']);
+        expect(diagramPath(r.ir, 'm.t.run.sub').map(e => e.id)).toEqual(['m.t.run', 'm.t.run.sub']);
+        expect(diagramPath(r.ir, null)).toEqual([]);
+        expect(diagramOf(r.ir, 'm.t.run.sub.deep')).toBe('m.t.run.sub');
+    });
+
+    it('frame what they hold where it was left, and their place is the node around them', async () => {
+        const r = await load();
+        const layout = { 'm.t.run': { x: -900, y: -900, width: 50, height: 50 }, 'm.t.run.a': { x: 100, y: 100 }, 'm.t.run.b': { x: 300, y: 200 } };
+        const g = toFlowGraph(r.ir, { root: 'm.t.run', layout });
+        const node = (id: string) => g.nodes.find(n => n.id === id)!;
+        // The outer diagram's entry for it isn't used: it sits where its contents are.
+        expect(node('m.t.run').data.position).toEqual({ x: 200, y: 150 });
+        expect(node('m.t.run.a').data.position).toEqual({ x: 100, y: 100 });
+        expect(toFlowGraph(r.ir, { layout }).nodes.find(n => n.id === 'm.t.run')!.data.position).toEqual({ x: -900, y: -900 });
+        // Its place isn't stored from inside.
+        expect(placedNodes(g.nodes, 'm.t.run').map(n => n.id)).toEqual(['m.t.run.a', 'm.t.run.b', 'm.t.run.sub']);
     });
 });
