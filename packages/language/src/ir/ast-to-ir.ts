@@ -14,7 +14,7 @@ import {
 import type { Element, Feature, Kind, Model, Profile, Value, Visual } from '../language/generated/ast.js';
 import { isDataTypeDecl, isListValue, isModel, isProfile, isRecordValue, isRefValue, type RecordValue } from '../language/generated/ast.js';
 import {
-    bounds, containmentCandidates, elementFeatures, elementId, enumId, hasModifier, kindId, literalValue,
+    bounds, containmentOf, elementFeatures, elementId, enumId, hasModifier, kindId, literalValue,
     oppositeOf, redefinesOf, subsetsOf
 } from '../language/semantics.js';
 
@@ -133,9 +133,7 @@ function modelToIR(m: Model): IRModel {
             references: {}
         };
         if (parent) {
-            const parentKind = el.$container.$type === 'Element' ? el.$container.kind.ref : undefined;
-            const c = parentKind ? containmentCandidates(parentKind, kind) : [];
-            ir.containedIn = c.length === 1 ? c[0].name : null;
+            ir.containedIn = containmentOf(el)?.name ?? null;
             parent.children.push(ir.id);
         }
         for (const slot of el.slots) {

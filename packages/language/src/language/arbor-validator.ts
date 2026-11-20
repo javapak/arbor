@@ -11,7 +11,7 @@
  */
 import { AstUtils, type AstNode, type IndexManager, type ValidationAcceptor, type ValidationChecks } from 'langium';
 import type {
-    DataTypeDecl, EdgeVisual, Element, Feature, RecordValue, StereotypeDecl, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual, VisualEntry
+    ContainsFeature, DataTypeDecl, EdgeVisual, Element, Feature, RecordValue, StereotypeDecl, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual, VisualEntry
 } from './generated/ast.js';
 import { isElement, isListValue, isRecordValue, isRefValue } from './generated/ast.js';
 import { EDGE_VISUAL_KEYS, OWNER_END, VISUAL_KEYS, checkVisualValue, type VisualKeySpec } from '@arbor/ir';
@@ -380,23 +380,17 @@ export class ArborValidator {
             this.checkSlot(kind, slot, features, accept);
         }
 
-        // Nested children: each must fit exactly one containment feature.
+        // Nested children: each goes into the containment it names, or the only one its kind fits.
         const counts = new Map<string, number>();
         for (const child of el.children) {
             const childKind = child.kind.ref;
             if (!childKind) continue;
-            const candidates = containmentCandidates(kind, childKind);
-            if (candidates.length === 0) {
-                accept('error', `${kind.name} cannot contain ${childKind.name} elements.`,
-                    { node: child, property: 'kind', code: DiagnosticCode.ChildNotAllowed });
-            } else if (candidates.length > 1) {
-                accept('error',
-                    `${childKind.name} fits several containments of ${kind.name} (${candidates.map(c => c.name).join(', ')}); this is ambiguous.`,
-                    { node: child, property: 'kind', code: DiagnosticCode.ChildNotAllowed });
-            } else {
-                const c = candidates[0];
+            const c = child.feature
+                ? this.checkNamedContainment(kind, child, childKind, accept)
+                : this.checkImpliedContainment(kind, child, childKind, accept);
+            if (c) {
                 counts.set(c.name, (counts.get(c.name) ?? 0) + 1);
-                if (c.name) given.add(c.name);
+                given.add(c.name);
             }
         }
         for (const [name, n] of counts) {
@@ -414,6 +408,59 @@ export class ArborValidator {
                     { node: el, property: 'name', code: DiagnosticCode.MissingRequired, data: { fix: f.name } });
             }
         }
+
+        if (el.feature && !isElement(el.$container)) {
+            accept('error', `'${el.feature} +=' names a containment of the parent, but ${el.name ?? 'this element'} is at the top level.`,
+                { node: el, property: 'feature', code: DiagnosticCode.ChildNotAllowed });
+        }
+    }
+
+    /** A nested element without `feature +=` must fit exactly one containment of its parent. */
+    private checkImpliedContainment(kind: Kind, child: Element, childKind: Kind, accept: ValidationAcceptor): ContainsFeature | undefined {
+        const candidates = containmentCandidates(kind, childKind);
+        if (candidates.length === 0) {
+            accept('error', `${kind.name} cannot contain ${childKind.name} elements.`,
+                { node: child, property: 'kind', code: DiagnosticCode.ChildNotAllowed });
+            return undefined;
+        }
+        if (candidates.length > 1) {
+            const names = candidates.map(c => c.name);
+            accept('error',
+                `${childKind.name} fits several containments of ${kind.name} (${names.join(', ')}); ` +
+                `name the one that holds it, e.g. '${names[0]} += ${childKind.name} ...'.`,
+                { node: child, property: 'kind', code: DiagnosticCode.ChildNotAllowed, data: { candidates: names } });
+            return undefined;
+        }
+        return candidates[0];
+    }
+
+    /** A nested element written `feature += Kind ...` goes into that containment, which must be able to hold it. */
+    private checkNamedContainment(kind: Kind, child: Element, childKind: Kind, accept: ValidationAcceptor): ContainsFeature | undefined {
+        const name = child.feature!;
+        const fail = (message: string, fix?: string) => {
+            accept('error', message, { node: child, property: 'feature', code: DiagnosticCode.ChildNotAllowed, data: { fix } });
+            return undefined;
+        };
+        const fitting = containmentCandidates(kind, childKind).map(c => c.name);
+        const f = allFeatures(kind).get(name);
+        if (!f) {
+            const fix = closest(name, fitting) ?? closest(name, [...allFeatures(kind).values()].filter(g => g.$type === 'ContainsFeature').map(g => g.name));
+            return fail(`${kind.name} has no containment '${name}'.${fix ? ` Did you mean '${fix}'?` : ''}`, fix);
+        }
+        if (f.$type !== 'ContainsFeature') {
+            return fail(`'${name}' of ${kind.name} is a ${f.$type === 'RefFeature' ? 'reference' : 'property'}, not a containment; set it as a slot (${name}: ...).`);
+        }
+        if (hasModifier(f, 'derived')) {
+            const fix = fitting.length === 1 ? fitting[0] : undefined;
+            return fail(`'${name}' of ${kind.name} is derived and holds nothing directly; ` +
+                (fitting.length ? `use a containment that subsets it (${fitting.join(', ')}).` : `no containment that subsets it holds ${childKind.name}.`), fix);
+        }
+        const target = f.target.ref;
+        if (target && !isA(childKind, target)) {
+            const fix = fitting.length === 1 ? fitting[0] : undefined;
+            return fail(`'${name}' of ${kind.name} holds ${target.name} elements, not ${childKind.name}.${fix ? ` Did you mean '${fix}'?` : ''}`, fix);
+        }
+        return target ? f : undefined;
     }
 
     /**

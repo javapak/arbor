@@ -131,7 +131,7 @@ kind Generalization {
 Every element has the same shape:
 
 ```
-(<<Stereotype, …>>)? <Kind> <Name>? (@"stable-id")? {
+(<feature> +=)? (<<Stereotype, …>>)? <Kind> <Name>? (@"stable-id")? {
     slot: value
     <nested elements>
 }
@@ -148,6 +148,16 @@ Every element has the same shape:
 | datatype value | `{ amount: 9.5  currency: "NOK" }`, its fields like slots (lists of them too) |
 
 - Nested elements go into whichever `contains` feature of the parent accepts their kind; it is an error if none or several do.
+- When several fit, name the one that holds it with `feature +=` before the element. A UML `StateMachine` is both a Behavior and a Classifier, so in a class it fits `ownedBehavior` and `nestedClassifier`:
+
+  ```
+  Class Door {
+      ownedBehavior += StateMachine Lifecycle { … }
+      nestedClassifier += Class Hinge { … }
+  }
+  ```
+
+  The feature must be a non-derived `contains` of the parent that holds the element's kind (ARB106 otherwise, with a `fix` when one containment fits). It counts toward that containment's multiplicity like any other child. Use it only where it's needed: without it, an element still goes into the most specific containment that fits.
 - The kind before an element name may be qualified: `software.Field f { … }`. Needed only when several profiles define that kind name.
 - References resolve by simple name to elements at the top level or in an enclosing scope, across files. Reach a nested element with a dotted path (`-> Checkout.OrderApi.placeOrder`), and qualify with the model name (`-> shop.Payments`) when several models have a top-level element of that name. A path's first segment is tried as an element first, then as a model name.
 - IDs: `@"id"` if given, else `<parentId>.<name>`, rooted at the model name. Give stable IDs to anything a diagram or another system refers to, so renames don't break them.
@@ -183,7 +193,7 @@ Every element has the same shape:
 | ARB103 | value has the wrong type |
 | ARB104 | reference points to the wrong kind |
 | ARB105 | missing required feature (`fix` = feature name) |
-| ARB106 | nested element fits no containment, or several |
+| ARB106 | nested element fits no containment, or several (name one with `feature +=`); or the containment it names can't hold it |
 | ARB107 | too many values / children |
 | ARB108 | slot set twice |
 | ARB109 | a derived feature is written |

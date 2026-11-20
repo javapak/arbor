@@ -190,6 +190,81 @@ describe('unnamed elements', () => {
     });
 });
 
+describe('named containments', () => {
+    // As in UML: a StateMachine is both a Behavior and a Class, so in a Class it fits
+    // ownedBehavior and nestedClassifier, neither of which subsets the other.
+    const profile = `profile n {
+        abstract kind Classifier {
+            derived contains ownedMembers:  Classifier [0..*]
+            contains nestedClassifier:      Classifier [0..*] subsets ownedMembers
+            contains ownedBehavior:         Behavior [0..*] subsets ownedMembers
+            contains classifierBehavior:    Behavior [0..1]
+            contains notes:                 Note [0..*]
+            ref      general:               Classifier [0..1]
+            prop     isActive:              bool = false
+        }
+        kind Class extends Classifier {}
+        abstract kind Behavior extends Class {}
+        kind StateMachine extends Behavior {}
+        kind Note {}
+    }`;
+
+    it('an ambiguous nested element says which containments fit and how to choose', async () => {
+        const r = await load('model m { Class A { StateMachine sm {} } }', profile);
+        const d = r.diagnostics.find(d => d.code === C.ChildNotAllowed)!;
+        expect(d.message).toBe("StateMachine fits several containments of Class (nestedClassifier, ownedBehavior, classifierBehavior); " +
+            "name the one that holds it, e.g. 'nestedClassifier += StateMachine ...'.");
+    });
+
+    it('goes into the containment it names, which counts toward its bounds', async () => {
+        const r = await load(`model m { Class A {
+            ownedBehavior += StateMachine sm {}
+            nestedClassifier += StateMachine inner {}
+            classifierBehavior += <<Tagged>> StateMachine main @"main" {}
+            notes += Note {}
+            Note {}
+        } }`, profile.replace('kind Note {}', 'kind Note {}\n        stereotype Tagged extends Behavior {}'));
+        expect(r.diagnostics).toEqual([]);
+        const el = (id: string) => new IRIndex(r.ir).elements.get(id)!;
+        expect(el('m.A.sm').containedIn).toBe('ownedBehavior');
+        expect(el('m.A.inner').containedIn).toBe('nestedClassifier');
+        expect(el('main')).toMatchObject({ containedIn: 'classifierBehavior', stereotypes: ['n.Tagged'] });
+        expect(el('m.A.Note#1').containedIn).toBe('notes');
+        expect(el('m.A.Note#2').containedIn).toBe('notes');
+
+        const tooMany = await load('model m { Class A { classifierBehavior += StateMachine a {}  classifierBehavior += StateMachine b {} } }', profile);
+        expect(tooMany.diagnostics.find(d => d.code === C.TooMany)?.message).toBe("'classifierBehavior' allows at most 1, found 2.");
+    });
+
+    it('rejects a containment that is unknown, not a containment, derived, of the wrong kind, or at the top level', async () => {
+        const r = await load(`model m {
+            Class A {
+                ownedBehaviour += StateMachine a {}
+                general += StateMachine b {}
+                ownedMembers += StateMachine c {}
+                ownedBehavior += Class d {}
+            }
+            notes += Note top {}
+        }`, profile);
+        const errors = r.diagnostics.filter(d => d.code === C.ChildNotAllowed);
+        expect(errors.map(d => d.message)).toEqual([
+            "Class has no containment 'ownedBehaviour'. Did you mean 'ownedBehavior'?",
+            "'general' of Class is a reference, not a containment; set it as a slot (general: ...).",
+            "'ownedMembers' of Class is derived and holds nothing directly; use a containment that subsets it (nestedClassifier, ownedBehavior, classifierBehavior).",
+            "'ownedBehavior' of Class holds Behavior elements, not Class. Did you mean 'nestedClassifier'?",
+            "'notes +=' names a containment of the parent, but top is at the top level.",
+        ]);
+        expect(errors[0].fix).toBe('ownedBehavior');
+        expect(new IRIndex(r.ir).elements.get('m.A.a')!.containedIn).toBeNull();
+    });
+
+    it('keywords can name the containment', async () => {
+        const r = await load('model m { K k { visual += K inner {} } }', 'profile k { kind K { contains visual: K [0..*] } }');
+        expect(r.diagnostics).toEqual([]);
+        expect(new IRIndex(r.ir).elements.get('m.k.inner')!.containedIn).toBe('visual');
+    });
+});
+
 describe('datatypes', () => {
     const profile = `profile d {
         enum Country { no, se }

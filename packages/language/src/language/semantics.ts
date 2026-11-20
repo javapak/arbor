@@ -152,6 +152,23 @@ export function containmentCandidates(parent: Kind, child: Kind): ContainsFeatur
     return out.filter(f => !covered.has(f.name));
 }
 
+/**
+ * The containment of its parent element that holds `el`: the one it names
+ * (`ownedBehavior += StateMachine sm { }`), if that can hold it, or else the only
+ * candidate for its kind. Undefined at the top level, or when that's ambiguous or wrong.
+ */
+export function containmentOf(el: Element): ContainsFeature | undefined {
+    const parent = isElement(el.$container) ? el.$container.kind.ref : undefined;
+    const kind = el.kind.ref;
+    if (!parent || !kind) return undefined;
+    if (el.feature) {
+        const f = allFeatures(parent).get(el.feature);
+        return f?.$type === 'ContainsFeature' && !hasModifier(f, 'derived') && f.target.ref && isA(kind, f.target.ref) ? f : undefined;
+    }
+    const c = containmentCandidates(parent, kind);
+    return c.length === 1 ? c[0] : undefined;
+}
+
 // ------------------------------------------------------------ values
 
 export type Scalar = string | number | boolean;

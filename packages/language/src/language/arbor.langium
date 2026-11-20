@@ -107,7 +107,7 @@ EnumLiteral:
 // ======================================================================
 // Models (M1): one generic shape for every element of every domain.
 //
-//   (<<Stereotype, ...>>)? <Kind> <Name>? (@"stable-id")? { slot: value  ...  <nested elements> }
+//   (<feature> +=)? (<<Stereotype, ...>>)? <Kind> <Name>? (@"stable-id")? { slot: value  ...  <nested elements> }
 // ======================================================================
 
 Model:
@@ -117,7 +117,10 @@ Model:
 
 // The name may be left out (a UML generalization, say): such an element can't be
 // referenced by name, and its ID is `<parent>.<Kind>#<n>` unless it has a stable one.
+// A nested element may name the parent's containment that holds it
+// (`ownedBehavior += StateMachine sm { ... }`), for when its kind fits several.
 Element:
+    (feature=FeatureName '+=')?
     (('<<' | '«') stereotypes+=[StereotypeDecl:QualifiedName] (',' stereotypes+=[StereotypeDecl:QualifiedName])* ('>>' | '»'))?
     kind=[Kind:QualifiedName] name=ID? ('@' stableId=STRING)? '{'
         (slots+=Slot | children+=Element)*
