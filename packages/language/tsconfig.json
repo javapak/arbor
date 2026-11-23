@@ -7,5 +7,5 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "references": [{ "path": "../ir" }, { "path": "../adapter-flow" }]
+  "references": [{ "path": "../ir" }, { "path": "../expr" }, { "path": "../adapter-flow" }]
 }

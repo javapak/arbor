@@ -108,6 +108,7 @@ describe('feature modifiers', () => {
                 prop n: int [0..1] opposite b
                 contains bs: B [0..*]
                 ref few: B [0..1] subsets bs
+                prop label: string [0..1] subsets bs
                 contains some: B [0..3]
                 contains more: B [0..*] subsets some
                 ref self: B [0..1] subsets self
@@ -131,7 +132,7 @@ describe('feature modifiers', () => {
             "'parent' is the owner through 'bs', so it holds one element at most: write [0..1] or [1].",
         ]);
         expect(by(C.BadSubsets)).toEqual([
-            "'few' cannot subset 'bs': one is a reference, the other a containment.",
+            "'label' cannot subset 'bs': one is a property, the other a containment.",
             "'more' allows more values than 'some' (3), which holds them all.",
             "'self' cannot subset itself.",
         ]);

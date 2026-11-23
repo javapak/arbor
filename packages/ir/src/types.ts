@@ -42,6 +42,26 @@ export interface IRKind {
     visual: IRVisual;
     /** Visuals for the elements whose property `feature` is `value` (written, or by default), in profile order. */
     visualWhen?: IRConditionalVisual[];
+    /** Rules every element of the kind keeps: expressions about the element (see @arbor/expr), true when kept. */
+    invariants?: IRInvariant[];
+    /** Queries the kind's elements answer, for invariants and derived features. */
+    operations?: IRQuery[];
+    /** What it plays for the tools (see ROLES): `class`, `machine`… */
+    roles?: string[];
+}
+
+export interface IRInvariant { name: string; expr: string; message?: string }
+
+/** A primitive type, or an enum, datatype or kind by ID. */
+export type IRTypeRef = IRPrimitiveType | { enum: string } | { datatype: string } | { kind: string };
+
+export interface IRQuery {
+    name: string;
+    params: Array<{ name: string; type: IRTypeRef; multiplicity: IRMultiplicity }>;
+    returns: IRTypeRef;
+    multiplicity: IRMultiplicity;
+    /** An expression giving the result, about the element, with the parameters as variables. */
+    body: string;
 }
 
 /** `visual when kind = choice { shape: "diamond" }`: restyles elements by a property's value. */
@@ -64,6 +84,10 @@ export interface IRFeatureModifiers {
     unique?: true;
     readonly?: true;
     derived?: true;
+    /** How a derived feature is worked out: an expression about the element (see @arbor/expr). Its values are in the IR. */
+    derive?: string;
+    /** What it plays for the tools (see ROLES): `attributes`, `guard`… */
+    roles?: string[];
     /** The feature of the target kind that points back (references and containments only). */
     opposite?: string;
     /** Features of the same kind whose values include this one's. */
@@ -106,7 +130,8 @@ export interface IRReference extends IRFeatureModifiers {
     visual?: IRVisual;
 }
 
-export type IRPrimitiveType = 'string' | 'int' | 'float' | 'bool';
+/** `expr` and `action` are strings in the expression language: a query, or statements (see @arbor/expr). */
+export type IRPrimitiveType = 'string' | 'int' | 'float' | 'bool' | 'expr' | 'action';
 
 /**
  * A UML stereotype: properties and references (tagged values) and visuals that

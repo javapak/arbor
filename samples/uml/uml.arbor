@@ -4,8 +4,11 @@
 
 profile uml version "0.1.0" {
 
+    // UML's qualified name: the names of the elements around it and its own, joined by ::.
     abstract kind NamedElement {
         prop description: string [0..1]
+        derived prop qualifiedName: string [0..1]
+            derive "if name.oclIsUndefined() then null else if oclContainer().oclIsUndefined() or oclContainer().qualifiedName.oclIsUndefined() then name else oclContainer().qualifiedName + '::' + name endif endif"
     }
 
     abstract kind PackageableElement extends NamedElement {}
@@ -17,13 +20,19 @@ profile uml version "0.1.0" {
 
     // As in UML: attributes and operations are both members (a derived union),
     // kept in order, and each knows its classifier (a derived opposite).
-    abstract kind Classifier extends PackageableElement {
+    abstract kind Classifier extends PackageableElement plays class {
         prop             isAbstract:      bool = false
         derived contains ownedMembers:    NamedElement [0..*]
-        ordered contains attributes:      Property [0..*] subsets ownedMembers
-        ordered contains operations:      Operation [0..*] subsets ownedMembers
-        contains         generalizations: Generalization [0..*]
+        ordered contains attributes:      Property [0..*] subsets ownedMembers plays attributes
+        ordered contains operations:      Operation [0..*] subsets ownedMembers plays operations
+        contains         generalizations: Generalization [0..*] plays generalizations
         contains         realizations:    InterfaceRealization [0..*]
+
+        // As UML derives them: the classifiers it specializes directly, and all of them.
+        derived ref general: Classifier [0..*] derive "generalizations.general->asSet()"
+        query allParents(): Classifier [0..*] = "general->closure(c | c.general)"
+        invariant noCycles: "not allParents()->includes(self)"
+            message "A classifier can't specialize itself, directly or through others."
     }
 
     // A class can nest classifiers and own behaviors. A behavior is itself a class,
@@ -31,7 +40,7 @@ profile uml version "0.1.0" {
     kind Class extends Classifier {
         contains nestedClassifier:   Classifier [0..*] subsets ownedMembers
         contains ownedBehavior:      Behavior [0..*] subsets ownedMembers
-        ref      classifierBehavior: Behavior [0..1] { hidden: true }
+        ref      classifierBehavior: Behavior [0..1] subsets ownedBehavior { hidden: true }
         visual { shape: "rectangle" color: "#0ea5e9" }
     }
 
@@ -39,27 +48,48 @@ profile uml version "0.1.0" {
         visual { shape: "rectangle" color: "#22c55e" label: "«interface» {name}" }
     }
 
-    kind DataType extends Classifier {
+    kind DataType extends Classifier plays primitive {
         visual { shape: "rectangle" color: "#94a3b8" label: "«dataType» {name}" }
     }
 
-    // Rows in their classifier's box, like UML compartments.
+    // A data type the expression language knows: Boolean, Integer, Real and String (see primitives.arbor).
+    kind PrimitiveType extends DataType {
+        visual { label: "«primitive» {name}" }
+    }
+
+    // Rows in their classifier's box, like UML compartments. A default value, an
+    // operation's body, a guard or an effect is written in the expression language
+    // (docs/EXPRESSIONS.md), and checked against the class it's about.
     kind Property extends NamedElement {
         derived ref classifier: Classifier [0..1] opposite attributes
-        ref  type:         Classifier [0..1]
-        prop multiplicity: string [0..1]
-        visual { member: true  label: "{name}{? : {type}}{? [{multiplicity}]}" }
+        ref  type:         Classifier [0..1] plays type
+        prop multiplicity: string [0..1] plays multiplicity
+        prop defaultValue: expr [0..1] plays default
+        prop isOrdered:    bool = false plays ordered
+        prop isUnique:     bool = true plays unique
+        prop isReadOnly:   bool = false plays readOnly
+        visual { member: true  label: "{name}{? : {type}}{? [{multiplicity}]}{? = {defaultValue}}" }
     }
 
     kind Operation extends NamedElement {
         derived ref classifier: Classifier [0..1] opposite operations
-        ref returns: Classifier [0..1]
-        visual { member: true  label: "{name}(){? : {returns}}" }
+        ordered contains ownedParameters: Parameter [0..*] plays parameters
+        ref  returns: Classifier [0..1] plays returns
+        prop isQuery: bool = false plays query
+        prop body:    action [0..1] plays body
+        visual { member: true  label: "{name}({ownedParameters}){? : {returns}}" }
+    }
+
+    // Shown in its operation's label, not drawn.
+    kind Parameter extends NamedElement {
+        ref  type:         Classifier [0..1] plays type
+        prop multiplicity: string [0..1] plays multiplicity
+        visual { hidden: true }
     }
 
     // Relationships: elements drawn as edges. Owned by the specific classifier.
     kind Generalization {
-        ref general: Classifier [1]
+        ref general: Classifier [1] plays general
         visual { source: "owner" target: "general" targetMarker: "triangle" label: "" }
     }
 
@@ -100,19 +130,21 @@ profile uml version "0.1.0" {
 
     // ------------------------------------------------------------ state machines
 
-    abstract kind Behavior extends Class {}
+    abstract kind Behavior extends Class plays behavior {}
 
     // A state machine, and a composite state, is one node that opens a diagram of
     // its own: its states, where they're dragged, joined by transitions. A region
     // is drawn only beside others (orthogonal regions); a lone one is just its states.
-    kind StateMachine extends Behavior {
-        contains regions: Region [1..*]
+    kind StateMachine extends Behavior plays machine {
+        contains regions: Region [1..*] plays regions
         visual { shape: "roundedRectangle" color: "#a855f7" container: true layout: "free" diagram: true label: "«stateMachine» {name}" }
     }
 
-    kind Region extends NamedElement {
-        contains subvertices: Vertex [0..*]
-        contains transitions: Transition [0..*]
+    kind Region extends NamedElement plays region {
+        invariant oneInitial: "subvertices->select(v | v.oclIsKindOf(Pseudostate) and v.oclAsType(Pseudostate).kind = PseudostateKind::initial)->size() <= 1"
+            message "A region has at most one initial pseudostate."
+        contains subvertices: Vertex [0..*] plays vertices
+        contains transitions: Transition [0..*] plays transitions
         visual { shape: "rectangle" color: "#e9d5ff" container: true layout: "free" hideWhenAlone: true width: 120 height: 60 }
     }
 
@@ -122,23 +154,24 @@ profile uml version "0.1.0" {
         derived ref incoming: Transition [0..*] opposite target
     }
 
-    kind State extends Vertex {
-        prop entry:      string [0..1]
-        prop exit:       string [0..1]
-        prop doActivity: string [0..1]
-        contains regions: Region [0..*]
+    kind State extends Vertex plays state {
+        prop entry:      action [0..1] plays entry
+        prop exit:       action [0..1] plays exit
+        prop doActivity: action [0..1] plays doActivity
+        contains regions: Region [0..*] plays regions
         visual { shape: "roundedRectangle" color: "#c084fc" container: true layout: "free" diagram: true width: 140 height: 50 }
     }
 
-    kind FinalState extends State {
+    kind FinalState extends State plays final {
+        invariant noOutgoing: "outgoing->isEmpty()"  message "A final state has no outgoing transitions."
         visual { shape: "finalNode" color: "#1e293b" label: "" width: 30 height: 30 }
     }
 
     enum PseudostateKind { initial, choice, junction, fork, join, deepHistory, shallowHistory, entryPoint, exitPoint, terminate }
 
     // Drawn by its kind, in UML's notation: an initial dot, a choice diamond, a fork or join bar, H for history...
-    kind Pseudostate extends Vertex {
-        prop kind: PseudostateKind = initial
+    kind Pseudostate extends Vertex plays pseudostate {
+        prop kind: PseudostateKind = initial plays pseudostateKind
         visual { shape: "initialNode" color: "#1e293b" label: "" width: 24 height: 24 }
         visual when kind = choice         { shape: "diamond"  color: "rgb(134, 255, 249)" width: 32 height: 32 }
         visual when kind = junction       { width: 14 height: 14 }
@@ -151,12 +184,12 @@ profile uml version "0.1.0" {
         visual when kind = terminate      { shape: "none" labelColor: "#1e293b" label: "×" width: 24 height: 24 }
     }
 
-    kind Transition extends NamedElement {
-        ref  source:  Vertex [1]
-        ref  target:  Vertex [1]
-        prop trigger: string [0..1]
-        prop guard:   string [0..1]
-        prop effect:  string [0..1]
+    kind Transition extends NamedElement plays transition {
+        ref  source:  Vertex [1] plays source
+        ref  target:  Vertex [1] plays target
+        prop trigger: string [0..1] plays trigger
+        prop guard:   expr [0..1] plays guard
+        prop effect:  action [0..1] plays effect
         visual { source: "source" target: "target" targetMarker: "arrow" label: "{trigger}{? [{guard}]}{? / {effect}}" }
     }
 }

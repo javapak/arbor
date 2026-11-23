@@ -1,0 +1,50 @@
+{
+  "format": "arbor/view",
+  "version": 1,
+  "model": "loan.arbor",
+  "nodes": {
+    "lending.Loan": {
+      "x": -100,
+      "y": -800,
+      "width": 1000,
+      "height": 500
+    },
+    "lending.Loan.Lifecycle": {
+      "x": 475,
+      "y": -60,
+      "width": 350,
+      "height": 180
+    },
+    "lending.Loan.Lifecycle.main.Active": {
+      "x": 125,
+      "y": -150
+    },
+    "lending.Loan.Lifecycle.main.Lost": {
+      "x": 834,
+      "y": 84
+    },
+    "lending.Loan.Lifecycle.main.Overdue": {
+      "x": 565,
+      "y": -457
+    },
+    "lending.Loan.Lifecycle.main.assess": {
+      "x": 350,
+      "y": 400,
+      "width": 100,
+      "height": 100
+    },
+    "lending.Loan.Lifecycle.main.closed": {
+      "x": 15,
+      "y": 115
+    },
+    "lending.Loan.Lifecycle.main.start": {
+      "x": 12,
+      "y": -138
+    },
+    "lending.StateMachine1": {
+      "x": -20,
+      "y": -10
+    }
+  },
+  "edges": {}
+}

@@ -1,11 +1,23 @@
 // A loan's life as a UML state machine (see uml.arbor), owned by the Loan class
-// as its behavior. Loan's attributes are typed by the library model's classes.
+// as its behavior. Its guards, effects and activities are written in the
+// expression language (docs/EXPRESSIONS.md), about a Loan: `fine` is its fine.
 model lending {
 
     Class Loan {
-        Property item   { type: -> library.Item }
-        Property member { type: -> library.Member }
-        Operation chargeFine {}
+        Property item            { type: -> library.Item }
+        Property member          { type: -> library.Member }
+        Property fine            { type: -> primitives.Real     defaultValue: "0.0" }
+        Property renewals        { type: -> primitives.Integer  defaultValue: "0" }
+        Property dailyRate       { type: -> primitives.Real     defaultValue: "0.5"   isReadOnly: true }
+        Property replacementCost { type: -> primitives.Real     defaultValue: "25.0"  isReadOnly: true }
+
+        Operation owes          { isQuery: true  returns: -> primitives.Boolean  body: "return fine > 0" }
+        Operation chargeFine    { Parameter amount { type: -> primitives.Real }  body: "fine := fine + amount" }
+        Operation accrueFine    { body: "chargeFine(dailyRate)" }
+        Operation renew         { body: "renewals := renewals + 1" }
+        Operation notifyMember  {}
+        Operation sendReminder  {}
+        Operation extendDueDate {}
         classifierBehavior: -> Lifecycle
 
         // A StateMachine is a Behavior and a Classifier, so it fits both
@@ -21,11 +33,11 @@ model lending {
                         State Lent {}
                         State Renewed { entry: "extendDueDate()" }
                         Transition { source: -> begin  target: -> Lent }
-                        Transition { source: -> Lent   target: -> Renewed  trigger: "renew"  guard: "renewals < 3" }
+                        Transition { source: -> Lent   target: -> Renewed  trigger: "renew"  guard: "renewals < 3"  effect: "renew()" }
                     }
                 }
                 State Overdue  { entry: "sendReminder()"  doActivity: "accrueFine()" }
-                State Lost     { entry: "chargeReplacement()" }
+                State Lost     { entry: "chargeFine(replacementCost)" }
                 FinalState closed {}
 
                 Transition { source: -> start    target: -> Active }
@@ -33,10 +45,10 @@ model lending {
                 Transition { source: -> Active   target: -> Overdue  trigger: "after(14 days)" }
                 Pseudostate assess { kind: choice }
                 Transition { source: -> Overdue  target: -> assess   trigger: "returned" }
-                Transition { source: -> assess   target: -> closed   guard: "fine == 0" }
-                Transition { source: -> assess   target: -> closed   guard: "fine > 0"  effect: "chargeFine()" }
+                Transition { source: -> assess   target: -> closed   guard: "not owes()" }
+                Transition { source: -> assess   target: -> closed   guard: "owes()"  effect: "notifyMember()" }
                 Transition { source: -> Overdue  target: -> Lost     trigger: "after(90 days)" }
-                Transition { source: -> Lost     target: -> closed   trigger: "paid"  guard: "amount >= replacementCost" }
+                Transition { source: -> Lost     target: -> closed   trigger: "paid"  effect: "fine := 0" }
             }
         }
     }

@@ -108,11 +108,21 @@ crossing never looks like a junction. Edges leaving a container are drawn over
 it.
 
 **Opening.** An element whose kind has a diagram of its own (`diagram: true`, like a UML
-state machine) is drawn as one node. Double-click it to open its diagram: what the element
+state machine) is drawn as one node, marked ⧉ in its bottom-right corner. Double-click it to open its diagram: what the element
 contains and nothing else, with the element's name as the title at the top. A bar at the
 top left shows where you are, as
 `model › Lifecycle`; its back button, or any name in it, goes back. Revealing an element
 from a tree view opens the diagram it's in.
+
+**Simulating.** In a state machine's diagram (or a composite state's in one), the toolbar's ▷
+button opens the simulator: **Start** runs the machine for a new instance of its class (its
+attributes at their defaults). The active states glow amber, and the transitions the last step
+took are drawn thick and amber. Send an enabled event with its button, or any event by name;
+move the clock on an hour, a day, or to the next `after(…)`. The panel lists the instance's
+attributes and everything that happened: states entered and left, transitions, operations
+called (those without a body are only recorded), and expressions that failed. Editing the
+text meanwhile keeps the run on the model it started with until you restart. See
+[SIMULATION.md](SIMULATION.md).
 
 **Moving.** Dragging a top-level node moves it; dragging a container moves its
 contents with it. An element inside a container goes back where it was when you

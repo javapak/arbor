@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Layout, EdgeLayout } from '@arbor/adapter-flow';
 import type { StructuredDiagnostic, TextEdit } from '@arbor/language';
 import type { IRDocument } from '@arbor/ir';
+import type { Highlight } from '@arbor/simulator-ui';
 import { applyEdit } from '@arbor/language';
 import software from '../../../examples/software.arbor?raw';
 import persistence from '../../../examples/persistence.arbor?raw';
@@ -28,6 +29,10 @@ export interface StudioState {
   ir: IRDocument | null;
   /** The element whose own diagram is open (a state machine, say), or null for the model's. */
   root: string | null;
+  /** The simulator panel is open. */
+  simulating: boolean;
+  /** What the simulator marks in the diagram: active states, transitions just taken. */
+  highlight: Highlight;
 
   setFile: (uri: string, text: string) => void;
   applyTextEdit: (edit: TextEdit) => void;
@@ -40,6 +45,8 @@ export interface StudioState {
   setPendingSelect: (id: string | null) => void;
   setIR: (ir: IRDocument) => void;
   setRoot: (root: string | null) => void;
+  setSimulating: (simulating: boolean) => void;
+  setHighlight: (highlight: Highlight) => void;
   reset: () => void;
 }
 
@@ -70,6 +77,8 @@ export const useStudio = create<StudioState>((set) => ({
   pendingSelect: null,
   ir: null,
   root: null,
+  simulating: false,
+  highlight: { nodes: [], edges: [] },
 
   setFile: (uri, text) => set(s => ({ files: { ...s.files, [uri]: text } })),
   applyTextEdit: (edit) => set(s => ({ files: { ...s.files, [edit.uri]: applyEdit(s.files[edit.uri] ?? '', edit) } })),
@@ -82,6 +91,8 @@ export const useStudio = create<StudioState>((set) => ({
   setPendingSelect: (pendingSelect) => set({ pendingSelect }),
   setIR: (ir) => set({ ir }),
   setRoot: (root) => set({ root }),
+  setSimulating: (simulating) => set({ simulating }),
+  setHighlight: (highlight) => set({ highlight }),
   reset: () => set({ files: EXAMPLES, active: 'shop.arbor', layout: {}, edgeLayout: {}, notice: null, root: null }),
 }));
 

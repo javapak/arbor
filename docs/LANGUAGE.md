@@ -39,7 +39,7 @@ profile persistence version "0.1.0" {
 }
 ```
 
-- Property types: `string`, `int`, `float`, `bool`, an enum name, or a datatype name.
+- Property types: `string`, `int`, `float`, `bool`, an enum name, or a datatype name; or `expr` (a query) or `action` (statements) in the [expression language](EXPRESSIONS.md), written as strings. Their text is always parsed (EXP001), and checked against what it's about where the profile has a binding (see [EXPRESSIONS.md](EXPRESSIONS.md#in-models)).
 - A `datatype` is a UML DataType: values with fields and no identity, written in place (`price: { amount: 9.5 }`, see [Models](#models)). Its fields are `prop`s, which may themselves be datatypes; its properties take no default.
 - A `stereotype` is a UML stereotype: properties, references and visuals for elements of the kinds it `extends` (and their sub-kinds), added only to elements it's applied to (`<<Audited>> Entity Order { … }`). Its slots are written with the element's own, so their names must be new to those kinds; it adds no containments. Its visuals restyle the element (colour, shape, icon…) but don't change how it's laid out (`container`, `member`, `source`, `target` stay the kind's).
 - Multiplicity: `[1]`, `[0..1]`, `[1..*]`, `[*]`. Defaults: `prop`/`ref` are `[0..1]`, `contains` is `[0..*]`.
@@ -52,14 +52,72 @@ profile persistence version "0.1.0" {
   - `svg`: inline SVG markup (use single quotes inside it). `image`: an image URL. Without a `shape` the SVG or image *is* the node; with one, it is drawn on the shape. `tint: true` colors an SVG with the node `color`.
   - `icon`: an emoji drawn on the node.
   - `color`, `labelColor`, `iconColor` (hex), `width`, `height`.
-  - `label`: a template with `{name}`, `{kind}`, or any slot: a property's value, or a reference's target names (`"{name} : {type}"`). A reference the label shows isn't also drawn as an edge.
+  - `label`: a template with `{name}`, `{kind}`, or any slot: a property's value, a reference's target names (`"{name} : {type}"`), or the names of what a containment holds. A reference the label shows isn't also drawn as an edge.
     A slot that isn't set is left empty. An **optional part** `{? … }` is shown only when every slot directly in it is set, so text around a slot disappears with it: `"{name}(){? : {returns}}"` reads `lend() : Date`, or just `chargeFine()`; a UML transition is `"{trigger}{? [{guard}]}{? / {effect}}"`. Optional parts can nest. Any other `{` or `}` is text. An optional part that's never closed is a warning (ARB008). `sourceLabel`, `targetLabel` and edge labels are templates too.
   - `container: true`: the diagram draws the elements this kind contains inside it, as rows (or nested boxes), instead of as composition edges. See [VSCODE.md](VSCODE.md#how-elements-are-drawn).
   - `layout: "free"` (with `container: true`): the contents keep their own shapes and go where they're dragged, like nodes on the canvas, and the container grows to hold them. Use it for diagrams drawn inside a box, such as a state machine's states or a composite state's regions. The default, `"rows"`, lists them in the text's order.
   - `diagram: true`: an element of this kind that contains something has a diagram of its own, like a UML state machine, composite state or activity (one that contains nothing is an ordinary node). In the diagram around it, it's one node and nothing it contains is drawn; double-click it to open its diagram, which draws what it contains at the top level, with its name as the title above the canvas. A back button and a breadcrumb return to the diagrams around it. Its contents' positions are stored in the same view file.
+  - `hidden: true`: elements of this kind aren't drawn, nor what they contain. A UML operation's parameters: its label can list them, as `"{name}({ownedParameters})"`.
   - `hideWhenAlone: true`: an element of this kind that is the only one in its owner's containment isn't drawn, and what it contains is drawn in its place. A UML region: a state machine's one region is just its states, but orthogonal regions are drawn as boxes side by side.
   - `member: true`: elements of this kind are drawn inside whatever contains them, as rows, like a UML class's attributes (`software.Field`, and so `persistence.Column`).
   - `source` and `target`: draw elements of this kind as **edges**, not nodes, between the elements two of its references name, or its `"owner"` (the element containing it). An edge kind can also set `line`, `sourceMarker`, `targetMarker`, `sourceLabel` and `targetLabel` (below), and its `label` is drawn at the middle (default `{name}`). Until both ends are set, the element is drawn as a node, so you can still see it and connect it.
+
+### Profiles in parts
+
+A large profile can be written in several files, each a named part of it:
+
+```
+profile uml part "CommonStructure" version "2.5.1" { … }     // uml-common.arbor
+profile uml part "StateMachines"   version "2.5.1" { … }     // uml-statemachines.arbor
+```
+
+The parts are one profile: one namespace (`uml.State`, whichever file defines it), one profile in the IR, and inside any part a bare name means the profile's own kind first, from whichever part. Each part has a distinct name; parts that give a version give the same one; a name is defined in one part only (ARB001). Without `part`, two profiles of the same name are an error, so unrelated profiles never merge by accident.
+
+### Roles
+
+The tools that give models meaning (expressions' type checking, the state machine simulator) don't know a profile's names: they read what its kinds and features *play*.
+
+```
+abstract kind Classifier extends PackageableElement plays class {
+    ordered contains attributes: Property [0..*] subsets ownedMembers plays attributes
+}
+kind Transition extends NamedElement plays transition {
+    ref  source: Vertex [1] plays source
+    prop guard:  expr [0..1] plays guard
+}
+```
+
+`plays` comes after a kind's `extends`, and after a feature's other clauses, with one or more roles. The roles are a fixed list (`ROLES` in `@arbor/ir`), each for a kind, or a containment, reference or property of a given type (ARB015 otherwise):
+
+| For | Roles |
+|---|---|
+| classes, for expressions | `class`, `behavior`, `primitive` (kinds); `attributes`, `operations`, `generalizations`, `parameters` (containments); `general`, `type`, `returns` (references); `multiplicity` (string), `ordered`, `unique`, `readOnly`, `query` (bool), `default` (expr), `body` (action) |
+| state machines | `machine`, `region`, `state`, `final`, `pseudostate`, `transition` (kinds); `regions`, `vertices`, `transitions` (containments); `source`, `target` (references); `trigger` (string), `pseudostateKind` (enum), `guard` (expr), `entry`, `exit`, `doActivity`, `effect` (action) |
+
+A profile whose kinds play them gets its guards, effects, bodies and defaults type-checked against its classes, and its state machines simulated. samples/uml plays all of them.
+
+### Rules: invariants, derived features, queries
+
+A kind can state rules about its elements, written in the [expression language](EXPRESSIONS.md) (OCL) about one of them, as `self`: its features by name, the kinds as types.
+
+```
+abstract kind NamedElement {
+    derived prop qualifiedName: string [0..1]
+        derive "if oclContainer().oclIsUndefined() then name else oclContainer().qualifiedName + '::' + name endif"
+}
+abstract kind Classifier extends NamedElement {
+    derived ref general: Classifier [0..*] derive "generalizations.general->asSet()"
+    query allParents(): Classifier [0..*] = "general->closure(c | c.general)"
+    invariant noCycles: "not allParents()->includes(self)"
+        message "A classifier can't specialize itself, directly or through others."
+}
+```
+
+- `invariant name: "…"` (with an optional `message "…"`): every element of the kind, and of its sub-kinds, keeps it; `arbor check` reports one that doesn't on the element, with the message (ARB115), and a rule it couldn't work out as a warning.
+- `derive "…"` on a `derived` feature (not one with an `opposite`): how it's worked out. Its values are computed into the IR, so diagrams, forms and the simulator see them; one that fails is a warning on the element (ARB116), and leaves the feature empty. Derived features can build on each other; one depending on itself is a failure.
+- `query name(param: Type, …): Type [m] = "…"`: an operation the kind's elements answer, for rules and derived features to call (`self.allParents()`); its parameters are variables in its body. A result or parameter with several values is a Set. A query calling itself without end is a failure.
+- `oclContainer()` is the element holding this one (null at the top level); `name` is every element's name.
+- The expressions are type-checked against the kind when the profile is checked, with problems inside the string (EXP001–EXP008), and must give what the rule needs: a Boolean, the feature's type, the query's result. These words are keywords too: `invariant`, `message`, `derive`, `query`.
 
 ### Visuals by value
 
@@ -109,10 +167,10 @@ kind DataProperty extends Property {
 | `readonly` | Set in the text, not changed by editors: forms show it read-only, and the diagram's Connect tool leaves it out. |
 | `derived` | Worked out, never written (ARB109). A derived reference with an `opposite` holds the elements that point at it through that reference, or the element containing it through that containment. One that other references `subsets` holds the union of their values. Anything else derived is left for tools to compute. Derived references aren't drawn as edges unless the feature says `{ hidden: false }`, since they repeat what other edges show. A derived containment holds no children directly: a nested element goes into the containments that subset it. |
 | `opposite f` | `f` is the target kind's feature pointing back: a reference (which names this one back, if it names any), or a containment (this is then the owner, `[0..1]` or `[1]`). When neither end is derived, both are written, and a model whose ends disagree gets a warning (ARB112). |
-| `subsets f, g` | This feature's values are also `f`'s and `g`'s (same kind, same sort of feature, a fitting type, no more values allowed). A nested element fitting a containment and one it subsets goes into the more specific one. |
+| `subsets f, g` | This feature's values are also `f`'s and `g`'s (same kind, a fitting type, no more values allowed). Properties subset properties; references and containments subset each other too, as in UML. A reference subsetting a containment names only elements that containment holds (`ref classifierBehavior: Behavior [0..1] subsets ownedBehavior`; ARB114 otherwise). A containment subsetting a derived reference adds its elements to that union (`contains ownedAttribute: Property [0..*] subsets attribute`). A nested element fitting a containment and one it subsets goes into the more specific one. |
 | `redefines f, g` | Replaces inherited features `f` and `g` (fitting type): elements of this kind no longer have them. Redefining a feature of the same name needs no clause. |
 
-These words (and `when`) are keywords, so they can't be element names or enum literals, but they can still be feature and slot names (`unique: true`).
+These words (and `when`, `part`, `plays`) are keywords, so they can't be element names or enum literals, but they can still be feature and slot names (`unique: true`).
 
 ### Edge styles
 
@@ -153,7 +211,7 @@ kind Generalization {
 Every element has the same shape:
 
 ```
-(<feature> +=)? (<<Stereotype, …>>)? <Kind> <Name>? (@"stable-id")? {
+(<feature> +=)? (<<Stereotype, …>>)? <Kind> <Name or "quoted name">? (@"stable-id")? {
     slot: value
     <nested elements>
 }
@@ -185,7 +243,8 @@ Every element has the same shape:
 - IDs: `@"id"` if given, else `<parentId>.<name>`, rooted at the model name. Give stable IDs to anything a diagram or another system refers to, so renames don't break them.
 - The name may be left out, for elements nothing refers to, like a UML generalization: `Generalization { general: -> Item }`. An unnamed element can't be referenced, is labelled `:Kind` in diagrams, and its ID is `<parentId>.<Kind>#<n>`, counting the unnamed elements of that kind among its siblings (without a stable ID) from 1. Reordering them changes the ID, so give one a stable ID if its layout or anything else outside the text matters.
 - Stereotypes are applied in `<< >>` (or `« »`) before the kind, several separated by commas. Each must extend the element's kind (ARB113), and their slots are written with the element's own. Diagrams show them before the name: `«Entity» Customer`.
-- Keywords may be used as slot names (`version: "2"`), but not as element names or enum literals.
+- A name can be quoted to hold anything an identifier can't: spaces, dots, operators, a keyword, escaped quotes (`Class "Order Line" { … }`, `Operation "operator+" {}`, `Box "model" {}`). It's referenced quoted too, also within a path: `-> "Order Line"`, `-> shop."Order Line"."unit price"`. Its ID uses the name as is (`shop.Order Line`). Text edits quote names that need it.
+- Keywords may be used as slot names (`version: "2"`), and as element names in quotes, but not as enum literals.
 
 ## Diagnostics
 
@@ -211,6 +270,8 @@ Every element has the same shape:
 | ARB011 | bad `redefines`: no inherited feature of that name, or a different sort or type |
 | ARB012 | bad stereotype: a feature its kinds already have, or a containment |
 | ARB013 | bad `visual when`: not a single-valued, non-datatype property of the kind, a value that doesn't fit it, used in a stereotype; or a layout key in it (warning) |
+| ARB014 | a `derive` on a feature that isn't `derived`, or that has an `opposite` |
+| ARB015 | an unknown role, or one played by the wrong sort of kind or feature (`fix` = closest role) |
 | ARB101 | abstract kind instantiated |
 | ARB102 | unknown slot (`fix` = closest feature) |
 | ARB103 | value has the wrong type |
@@ -224,3 +285,6 @@ Every element has the same shape:
 | ARB111 | a value repeated in a `unique` slot |
 | ARB112 | written opposite references disagree: a target doesn't point back (warning; `data` names the element and slot) |
 | ARB113 | a stereotype applied to a kind it doesn't extend, applied twice, or adding a slot another applied one adds too |
+| ARB114 | a reference that subsets a containment names an element that containment doesn't hold |
+| ARB115 | an element breaks an invariant of its kind (an error, with the invariant's message), or it couldn't be checked (a warning) |
+| ARB116 | a derived feature's `derive` failed for an element (warning) |

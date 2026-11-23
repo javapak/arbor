@@ -8,7 +8,7 @@
 import { AstUtils, GrammarUtils, type CstNode } from 'langium';
 import type { Document, Element, Kind, Model, PropFeature, RefFeature } from './language/generated/ast.js';
 import { isContainsFeature, isDataTypeDecl, isElement, isEnumDecl, isModel, isProfile, isRefFeature } from './language/generated/ast.js';
-import { bounds, displayName, elementFeatures, elementId, isA, kindId } from './language/semantics.js';
+import { bounds, displayName, elementFeatures, elementId, isA, kindId, nameText } from './language/semantics.js';
 import { buildDocuments, type Source } from './cli/load.js';
 
 /** Replace `length` characters at `offset` in the source named `uri` with `text`. */
@@ -184,7 +184,7 @@ function literalText(prop: PropFeature, v: string | number | boolean): string | 
         return typeof v === 'string' && literals.includes(v) ? v : { error: `${String(v)} is not a literal of ${t.decl.$refText}` };
     }
     switch (t.primitive) {
-        case 'string': return typeof v === 'string' ? JSON.stringify(v) : { error: `${prop.name} takes a string` };
+        case 'string': case 'expr': case 'action': return typeof v === 'string' ? JSON.stringify(v) : { error: `${prop.name} takes a string` };
         case 'bool': return typeof v === 'boolean' ? String(v) : { error: `${prop.name} takes true or false` };
         case 'int': return typeof v === 'number' && Number.isInteger(v) ? String(v) : { error: `${prop.name} takes an integer` };
         case 'float': return typeof v === 'number' && Number.isFinite(v) ? String(v) : { error: `${prop.name} takes a number` };
@@ -203,7 +203,7 @@ function refText(ref: RefFeature, target: string | number | boolean, from: Eleme
     while (isElement(node)) {
         // References go by name, so an unnamed element (or one inside it) can't be pointed at.
         if (!node.name) return { error: `${displayName(node)} has no name, so it can't be referenced` };
-        path.unshift(node.name);
+        path.unshift(nameText(node.name));
         node = node.$container;
     }
     const sameModel = AstUtils.getContainerOfType(from, isModel) === node;

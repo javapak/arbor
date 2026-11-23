@@ -5,7 +5,8 @@
  *  - With an `opposite`: the elements whose opposite reference points at the
  *    element, or the element that contains it through the opposite containment.
  *  - Otherwise, when other references `subsets` it: the union of their values
- *    (a UML derived union).
+ *    (a UML derived union), with the elements of containments that subset it
+ *    (a class's attributes, when `ownedAttribute subsets attribute`).
  *
  * Plain data in, plain data out; nothing is evaluated.
  */
@@ -65,6 +66,10 @@ export function deriveReferences(doc: IRDocument): IRDocument {
         const out = new Set<string>();
         for (const sub of index.elementFeatures(el)) {
             if (sub.feature === 'ref' && sub.subsets?.includes(name)) union(el, sub.name, seen).forEach(v => out.add(v));
+        }
+        for (const id of el.children) {
+            const child = index.elements.get(id);
+            if (child && within(el.kind, child.containedIn, name)) out.add(id);
         }
         set(el, name, [...out]);
         done.add(key);

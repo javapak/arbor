@@ -1,4 +1,4 @@
-import { inject, type Module } from 'langium';
+import { DefaultValueConverter, ValueConverter, inject, type CstNode, type GrammarAST, type Module, type ValueType } from 'langium';
 import {
     createDefaultModule, createDefaultSharedModule,
     type DefaultSharedModuleContext, type LangiumServices, type LangiumSharedServices,
@@ -19,7 +19,18 @@ export type ArborAddedServices = {
 
 export type ArborServices = LangiumServices & ArborAddedServices;
 
+/** A quoted element name is its text, unescaped as strings are: `"Order Line"` is `Order Line`. */
+export class ArborValueConverter extends DefaultValueConverter {
+    protected override runConverter(rule: GrammarAST.AbstractRule, input: string, cstNode: CstNode): ValueType {
+        if (rule.name === 'ElementName') return input.startsWith('"') ? ValueConverter.convertString(input) : input;
+        return super.runConverter(rule, input, cstNode);
+    }
+}
+
 export const ArborModule: Module<ArborServices, PartialLangiumServices & ArborAddedServices> = {
+    parser: {
+        ValueConverter: () => new ArborValueConverter()
+    },
     validation: {
         ArborValidator: (services) => new ArborValidator(services)
     },

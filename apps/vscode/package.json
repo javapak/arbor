@@ -258,6 +258,8 @@
     "@arbor/ir": "0.1.0",
     "@arbor/language": "0.1.0",
     "@arbor/property-form": "0.1.0",
+    "@arbor/simulator-ui": "0.1.0",
+    "@arbor/statemachine": "0.1.0",
     "@fluentui/react-icons": "^2.0.311",
     "@mantine/core": "^8.3.2",
     "@mantine/hooks": "^8.3.2",

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { IRDocument } from '@arbor/ir';
 import type { EdgeLayout, Layout } from '@arbor/adapter-flow';
 import type { HostMessage } from '../src/protocol';
+import type { Highlight } from '@arbor/simulator-ui';
 
 /**
  * Webview state: a mirror of what the host owns. The model comes from the
@@ -26,6 +27,10 @@ export interface DiagramState {
     layoutReady: boolean;
     /** The element whose own diagram is open (a state machine, say), or null for the model's. */
     root: string | null;
+    /** The simulator panel is open. */
+    simulating: boolean;
+    /** What the simulator marks in the diagram: active states, transitions just taken. */
+    highlight: Highlight;
 
     setLayout: (update: (layout: Layout) => Layout) => void;
     setEdgeLayout: (update: (layout: EdgeLayout) => EdgeLayout) => void;
@@ -33,6 +38,8 @@ export interface DiagramState {
     resync: () => void;
     setPendingSelect: (id: string | null) => void;
     setRoot: (root: string | null) => void;
+    setSimulating: (simulating: boolean) => void;
+    setHighlight: (highlight: Highlight) => void;
     receive: (m: HostMessage) => void;
 }
 
@@ -49,6 +56,8 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     dark: true,
     layoutReady: false,
     root: null,
+    simulating: false,
+    highlight: { nodes: [], edges: [] },
 
     setLayout: (update) => set(s => ({ layout: update(s.layout) })),
     setEdgeLayout: (update) => set(s => ({ edgeLayout: update(s.edgeLayout) })),
@@ -56,6 +65,8 @@ export const useDiagramStore = create<DiagramState>((set) => ({
     resync: () => set(s => ({ resyncRequest: s.resyncRequest + 1 })),
     setPendingSelect: (pendingSelect) => set({ pendingSelect }),
     setRoot: (root) => set({ root }),
+    setSimulating: (simulating) => set({ simulating }),
+    setHighlight: (highlight) => set({ highlight }),
     receive: (m) => {
         switch (m.type) {
             case 'model':

@@ -4,16 +4,19 @@
   "type": "module",
   "workspaces": [
     "packages/ir",
+    "packages/expr",
+    "packages/statemachine",
     "packages/language",
     "packages/adapter-flow",
     "packages/property-form",
+    "packages/simulator-ui",
     "apps/studio",
     "apps/vscode"
   ],
   "scripts": {
     "setup": "npm i && cd packages/adapter-flow && npm i && cd ../ir && npm i && cd ../language && npm i && npm audit fix",
     "generate": "npm run generate -w @arbor/language",
-    "build": "npm run generate && tsc -b packages/ir packages/adapter-flow packages/language packages/property-form && cd apps/studio && npm run build",
+    "build": "npm run generate && tsc -b packages/ir packages/expr packages/statemachine packages/adapter-flow packages/language packages/property-form packages/simulator-ui && cd apps/studio && npm run build",
     "test": "npm run build && vitest run",
     "lint": "eslint .",
     "ir": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js ir",

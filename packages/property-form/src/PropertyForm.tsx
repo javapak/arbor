@@ -147,7 +147,7 @@ interface DraftProps<T> {
 /** Keeps typing local and reports on blur or Enter, so each keystroke isn't a text edit. Empty removes the slot. */
 function TextDraft({ value, onCommit, ...rest }: DraftProps<string>) {
     const [draft, setDraft] = useState(value ?? '');
-    useEffect(() => setDraft(value ?? ''), [value]);
+    useEffect(() => { setDraft(value ?? ''); }, [value]);
     const commit = () => { if (draft !== (value ?? '')) onCommit(draft === '' ? undefined : draft); };
     return (
         <TextInput {...rest} value={draft} onChange={e => setDraft(e.currentTarget.value)} onBlur={commit}
@@ -157,7 +157,7 @@ function TextDraft({ value, onCommit, ...rest }: DraftProps<string>) {
 
 function NumberDraft({ value, onCommit, integer, ...rest }: DraftProps<number> & { integer: boolean }) {
     const [draft, setDraft] = useState<string | number>(value ?? '');
-    useEffect(() => setDraft(value ?? ''), [value]);
+    useEffect(() => { setDraft(value ?? ''); }, [value]);
     const commit = () => {
         const next = draft === '' ? undefined : Number(draft);
         if (next !== value && (next === undefined || Number.isFinite(next))) onCommit(next);

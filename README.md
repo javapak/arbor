@@ -36,6 +36,8 @@ runtime with no TypeScript compiler API and no `eval`.
 | Package | Depends on | Purpose |
 |---|---|---|
 | `@arbor/ir` | nothing | IR types, JSON Schema, `IRIndex` read helpers (inheritance, defaults, visuals), and the renderer-neutral visual vocabulary (`VISUAL_KEYS`) |
+| `@arbor/expr` | `@arbor/ir` | the expression language ([docs/EXPRESSIONS.md](docs/EXPRESSIONS.md)): OCL-style queries and a small action language, parsed, type-checked and interpreted (no eval), against the model itself or a simulation's objects |
+| `@arbor/statemachine` | `@arbor/ir`, `@arbor/expr` | runs a model's state machines for simulation ([docs/SIMULATION.md](docs/SIMULATION.md)): UML run-to-completion semantics, a virtual clock, a trace |
 | `@arbor/adapter-flow` | `@arbor/ir` | IR → `{ nodes, edges }` for the renderer, with layout from a sidecar |
 | `@arbor/language` | Langium, the two above | grammar, validator, AST → IR, CLI, LSP entry points (Node + web worker), diagram requests (`src/lsp/`) |
 | `@arbor/property-form` | `@arbor/ir`, React, Mantine | a form for one element's slots, drawn from the JSON Schema `slotSchema` derives from its kind |

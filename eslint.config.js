@@ -22,6 +22,12 @@ export default tseslint.config(
                 {
                     selector: 'ImportExpression[source.type!="Literal"]',
                     message: 'Dynamic import of computed paths is not allowed.'
+                },
+                {
+                    // React calls whatever an effect returns as its cleanup; a call's result (a Promise from
+                    // scrollIntoView, say) breaks the page when it unmounts or re-renders.
+                    selector: "CallExpression[callee.name=/^use(Layout)?Effect$/] > ArrowFunctionExpression:first-child[body.type!='BlockStatement'][body.type!='ArrowFunctionExpression'][body.type!='Identifier']",
+                    message: 'Give an effect a block body ({ … }), or return a cleanup function: React calls what it returns.'
                 }
             ]
         }

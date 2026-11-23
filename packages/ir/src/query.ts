@@ -12,7 +12,7 @@ export function displayName(element: IRElement): string {
  * Visual keys that decide how an element is laid out rather than styled: stereotypes and
  * `visual when` blocks can't change them, since they'd make elements of one kind lay out differently.
  */
-export const STRUCTURAL_VISUALS: ReadonlySet<string> = new Set(['container', 'diagram', 'hideWhenAlone', 'layout', 'member', 'source', 'target']);
+export const STRUCTURAL_VISUALS: ReadonlySet<string> = new Set(['container', 'diagram', 'hidden', 'hideWhenAlone', 'layout', 'member', 'source', 'target']);
 
 /**
  * Read helpers for consumers. Interpreted against the profile data at runtime:

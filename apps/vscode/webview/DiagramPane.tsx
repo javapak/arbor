@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { DiagramCanvas, useDiagram, useRenderSettings } from 'webgpu-flow';
-import { diagramOf, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
+import { diagramOf, highlight, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
 import { useDiagramStore } from './store';
 import { post } from './vscode';
 
@@ -22,6 +22,7 @@ export default function DiagramPane() {
     const resyncRequest = useDiagramStore(s => s.resyncRequest);
     const pendingSelect = useDiagramStore(s => s.pendingSelect);
     const root = useDiagramStore(s => s.root);
+    const marks = useDiagramStore(s => s.highlight);
     const resolution = useRenderSettings(s => s.resolution);
     const container = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 0, height: 0 });
@@ -29,7 +30,7 @@ export default function DiagramPane() {
     // The properties view shows the selected element. A redraw clears the selection until the
     // element is reselected; report the pending one meanwhile, so the form isn't torn down mid-typing.
     const reported = selected.current ?? pendingSelect;
-    useEffect(() => post({ type: 'selection', id: reported }), [reported]);
+    useEffect(() => { post({ type: 'selection', id: reported }); }, [reported]);
 
     // Opening another diagram shows all of it.
     const shownRoot = useRef(root);
@@ -59,8 +60,9 @@ export default function DiagramPane() {
             setLayout(l => ({ ...l, ...entries }));
             post({ type: 'layout', nodes: entries });
         }
-        loadDiagram(graph);
-    }, [ir, viewRevision, resyncRequest, root, loadDiagram]);
+        // A simulation's active states and the transitions it just took.
+        loadDiagram(highlight(graph, marks));
+    }, [ir, viewRevision, resyncRequest, root, marks, loadDiagram]);
 
     // Fit the first diagram once it is committed (the provider syncs its state after this effect).
     useEffect(() => {

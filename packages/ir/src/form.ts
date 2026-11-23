@@ -55,7 +55,7 @@ export interface ListSchema {
 /** A form's value: slot name -> scalar, element ID, or a list of them. */
 export type SlotValues = Record<string, IRValue>;
 
-const TYPES = { string: 'string', int: 'integer', float: 'number', bool: 'boolean' } as const;
+const TYPES = { string: 'string', int: 'integer', float: 'number', bool: 'boolean', expr: 'string', action: 'string' } as const;
 
 /**
  * The schema for elements of a kind, or for one element (its kind's slots,

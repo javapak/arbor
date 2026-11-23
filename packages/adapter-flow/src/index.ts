@@ -96,6 +96,10 @@ export interface FlowNode {
         detail?: string;
         /** Lines listed under the header: the properties written in the text, `name = value`. */
         compartment?: string[];
+        /** Text in the bottom-right corner: OPENS_BADGE on a node that opens a diagram of its own. */
+        badge?: string;
+        /** Drawn glowing: set by `highlight`, e.g. a simulation's active states. */
+        highlighted?: boolean;
     };
 }
 
@@ -190,7 +194,8 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
     const asEdges = edgeElements(doc, index);
     const view = diagramView(index, opts.root);
     const alone = hiddenWhenAlone(index);
-    const drawn = (id: string) => view.has(id) && !alone.has(id) && !asEdges.edges.has(id) && !asEdges.hidden.has(id);
+    const unseen = hiddenKinds(index);
+    const drawn = (id: string) => view.has(id) && !alone.has(id) && !unseen.has(id) && !asEdges.edges.has(id) && !asEdges.hidden.has(id);
     // The owner an element is drawn in: past any hidden when alone, whose contents take their place.
     const ownerOf = (el: IRElement): string | null => {
         let p = el.parent;
@@ -235,6 +240,7 @@ export function toFlowGraph(doc: IRDocument, opts: FlowOptions = {}): FlowGraph 
                 visual: {
                     ...kindVisual(v, size, contentSize),
                     container: v.container === true && !view.collapsed(el),
+                    ...(view.collapsed(el) ? { badge: OPENS_BADGE } : {}),
                     ...(isFreeVisual(v) && !view.collapsed(el) ? { layout: 'free' as const } : {}),
                     // A member's kind is clear from where it is (every row in an Entity is a Column).
                     ...(boxes.isRow(el)
@@ -403,6 +409,11 @@ function labelFor(el: IRElement, template: unknown, index: IRIndex): string {
         if (k === 'kind') return el.kind.split('.').pop() ?? '';
         const targets = el.references[k];
         if (targets) return targets.map(t => index.elements.get(t)?.name ?? t).join(', ');
+        // A containment: the names of what it holds (an operation's parameters).
+        if (index.elementFeature(el, k)?.feature === 'contains') {
+            const held = el.children.flatMap(id => { const c = index.elements.get(id); return c?.containedIn === k ? [displayName(c)] : []; });
+            return held.length ? held.join(', ') : undefined;
+        }
         const value = el.properties[k];
         return value === undefined ? undefined : Array.isArray(value) ? value.join(', ') : String(value);
     }).trim();
@@ -446,6 +457,27 @@ type Box = { x: number; y: number; width: number; height: number };
 type Size = { width: number; height: number };
 
 // ------------------------------------------------------------ diagrams of their own
+
+/** An edge `highlight` marks: amber, and thicker. */
+const HIGHLIGHT_EDGE: Pick<FlowEdge['style'], 'color' | 'thickness'> = { color: [1, 0.72, 0.1, 1], thickness: 3.5 };
+
+/**
+ * The graph with some nodes glowing and some edges marked, by element ID: a
+ * simulation's active states and the transitions it just took. IDs not drawn
+ * in this graph are ignored.
+ */
+export function highlight(graph: FlowGraph, marks: { nodes?: Iterable<string>; edges?: Iterable<string> }): FlowGraph {
+    const nodes = new Set(marks.nodes ?? []), edges = new Set(marks.edges ?? []);
+    if (!nodes.size && !edges.size) return graph;
+    return {
+        ...graph,
+        nodes: graph.nodes.map(n => (nodes.has(n.id) ? { ...n, visual: { ...n.visual, highlighted: true } } : n)),
+        edges: graph.edges.map(e => (edges.has(e.id) ? { ...e, style: { ...e.style, ...HIGHLIGHT_EDGE } } : e)),
+    };
+}
+
+/** The badge on a node that opens a diagram of its own (double-click): two linked boxes, like UML's composite-state icon. */
+export const OPENS_BADGE = '⧉';
 
 /** Whether the element has a diagram of its own: its kind says so (`diagram: true`), and it contains something. */
 function opensDiagram(index: IRIndex, el: IRElement): boolean {
@@ -494,6 +526,18 @@ function diagramView(index: IRIndex, root: string | undefined): { has(id: string
         has: id => ids.has(id),
         collapsed: el => opensDiagram(index, el),
     };
+}
+
+/** The elements of kinds that set `hidden: true`, and what they contain: not drawn at all. */
+function hiddenKinds(index: IRIndex): Set<string> {
+    const out = new Set<string>();
+    const hide = (id: string) => {
+        if (out.has(id)) return;
+        out.add(id);
+        index.elements.get(id)?.children.forEach(hide);
+    };
+    for (const el of index.elements.values()) if (index.visual(el.kind).hidden === true) hide(el.id);
+    return out;
 }
 
 /**
@@ -667,14 +711,15 @@ function placeElements(
  * An element's compartment: each property written in its text (not the
  * profile's defaults; references are edges), in the order the kind declares
  * them, as `name = value`, the value as the text writes it (see `valueText`),
- * except those a `visual when` tests, which its looks already show.
+ * except derived ones and those a `visual when` tests, which its looks already show.
  */
 function propertyLines(el: IRElement, index: IRIndex): string[] {
     const lines: string[] = [];
     // A property a `visual when` tests is shown by how the element looks (a choice's diamond).
     const styling = new Set(index.lineage(el.kind).flatMap(k => (k.visualWhen ?? []).map(c => c.feature)));
     for (const f of index.elementFeatures(el)) {
-        if (f.feature !== 'property' || !Object.hasOwn(el.properties, f.name) || styling.has(f.name)) continue;
+        // Derived values are worked out, not written (the properties view shows them).
+        if (f.feature !== 'property' || f.derived || !Object.hasOwn(el.properties, f.name) || styling.has(f.name)) continue;
         const line = `${f.name} = ${valueText(index, f.type, el.properties[f.name])}`;
         lines.push(line.length > MAX_LINE ? `${line.slice(0, MAX_LINE - 1)}…` : line);
     }

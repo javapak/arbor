@@ -2,7 +2,7 @@ import { Validator } from '@cfworker/json-schema';   // interprets schemas; no c
 import { describe, expect, it } from 'vitest';
 import { IRIndex, referenceSlotsFor, withTarget, withoutTarget } from '@arbor/ir';
 import schema from '../../ir/schema/ir.schema.json' with { type: 'json' };
-import { diagramOf, diagramPath, diagramTitle, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
+import { diagramOf, diagramPath, diagramTitle, highlight, placedNodes, toFlowGraph } from '@arbor/adapter-flow';
 import { EmptyFileSystem, URI } from 'langium';
 import { loadWorkspace } from '../src/cli/load.js';
 import { toIR } from '../src/ir/ast-to-ir.js';
@@ -398,7 +398,8 @@ describe('diagrams of their own', () => {
         expect(ids('m.t.run')).toEqual(['m.t.run.a', 'm.t.run.b', 'm.t.run.sub']);
         expect(ids('m.t.run.sub')).toEqual(['m.t.run.sub.deep']);
         const inner = toFlowGraph(r.ir, { root: 'm.t.run' });
-        expect(inner.nodes.find(n => n.id === 'm.t.run.sub')!.data.opens).toBe(true);
+        expect(inner.nodes.find(n => n.id === 'm.t.run.sub')).toMatchObject({ data: { opens: true }, visual: { badge: '⧉' } });
+        expect(inner.nodes.find(n => n.id === 'm.t.run.a')!.visual.badge).toBeUndefined();
         expect(inner.edges.map(e => e.id)).toEqual(['m.t.run.a--next->m.t.run.b']);
         expect(diagramPath(r.ir, 'm.t.run.sub').map(e => e.id)).toEqual(['m.t.run', 'm.t.run.sub']);
         expect(diagramPath(r.ir, null)).toEqual([]);
@@ -444,5 +445,18 @@ describe('hidden when alone', () => {
         expect(toFlowGraph(r.ir, { root: 'm.one' }).nodes.some(n => n.data.opens)).toBe(false);
         expect(nodes('m.deep.only.outer')).toEqual([['m.deep.only.outer.inner.x', null]]);
         expect(diagramPath(r.ir, 'm.deep.only.outer').map(e => e.id)).toEqual(['m.deep', 'm.deep.only.outer']);
+    });
+});
+
+describe('highlighting', () => {
+    it('marks nodes and edges by element ID, leaving the rest and the original graph alone', async () => {
+        const r = await withProfiles('model m { software.Component a { requires: [-> b] }  software.Interface b {} }');
+        const g = toFlowGraph(r.ir);
+        const edge = g.edges[0];
+        const marked = highlight(g, { nodes: ['m.a', 'm.gone'], edges: [edge.id] });
+        expect(marked.nodes.map(n => n.visual.highlighted ?? false)).toEqual([true, false]);
+        expect(marked.edges[0].style).toMatchObject({ thickness: 3.5, color: [1, 0.72, 0.1, 1] });
+        expect(g.nodes[0].visual.highlighted).toBeUndefined();
+        expect(highlight(g, {})).toBe(g);
     });
 });

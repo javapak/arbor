@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActionIcon, Group, Menu, Tooltip } from '@mantine/core';
-import { ConnectorRegular, FlowchartRegular, SettingsRegular, ZoomFitRegular } from '@fluentui/react-icons';
+import { ConnectorRegular, FlowchartRegular, PlayRegular, SettingsRegular, ZoomFitRegular } from '@fluentui/react-icons';
+import { machineOf } from '@arbor/statemachine';
 import { InteractionMode, RenderSettingsModal, useDiagram, type LayoutOptions } from 'webgpu-flow';
 import { placedNodes, type LayoutEntry } from '@arbor/adapter-flow';
 import { useStudio } from './store';
@@ -17,6 +18,9 @@ const LAYOUTS: Array<{ label: string; options: Partial<LayoutOptions> }> = [
 /** Fit the diagram to the view, and lay it out automatically; a layout is kept in the layout sidecars like a move. */
 export default function Toolbar() {
   const { fitToContent, applyLayout, serializeDiagram, mode, toggleMode, exitDrawMode } = useDiagram();
+  const { ir, root, simulating, setSimulating } = useStudio();
+  // Inside a state machine's diagram (or a composite state's in one).
+  const canSimulate = !!ir && !!root && !!machineOf(ir, root);
   const connecting = mode === InteractionMode.DRAW_EDGE;
   const [running, setRunning] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -54,6 +58,14 @@ export default function Toolbar() {
           <ConnectorRegular />
         </ActionIcon>
       </Tooltip>
+      {canSimulate && (
+        <Tooltip label="Simulate this state machine">
+          <ActionIcon variant={simulating ? 'filled' : 'default'} aria-label="Simulate" aria-pressed={simulating}
+            onClick={() => setSimulating(!simulating)}>
+            <PlayRegular />
+          </ActionIcon>
+        </Tooltip>
+      )}
       <Tooltip label="Fit to view">
         <ActionIcon variant="default" aria-label="Fit to view" onClick={() => fitToContent()}>
           <ZoomFitRegular />

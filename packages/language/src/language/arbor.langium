@@ -17,19 +17,39 @@ entry Document: Profile | Model;
 // Profiles (M2)
 // ======================================================================
 
+// A profile may be written in parts, one per file, each named: `profile uml part "StateMachines" { … }`.
+// They're one profile: one namespace (`uml.State`), whose names resolve across its parts.
 Profile:
-    'profile' name=ID ('version' version=STRING)? '{'
+    'profile' name=ID ('part' part=STRING)? ('version' version=STRING)? '{'
         (kinds+=Kind | enums+=EnumDecl | datatypes+=DataTypeDecl | stereotypes+=StereotypeDecl)*
     '}';
 
 Kind:
     (abstract?='abstract')? 'kind' name=ID
         ('extends' supers+=[Kind:QualifiedName] (',' supers+=[Kind:QualifiedName])*)?
+        ('plays' roles+=FeatureName (',' roles+=FeatureName)*)?
     '{'
-        (features+=Feature | visuals+=Visual)*
+        (features+=Feature | visuals+=Visual | invariants+=Invariant | operations+=QueryOperation)*
     '}';
 
 Feature: PropFeature | ContainsFeature | RefFeature;
+
+// A rule every element of the kind keeps, in the expression language (docs/EXPRESSIONS.md), about the element:
+// invariant oneInitial: "subvertices->select(…)->size() <= 1" message "A region has at most one initial pseudostate."
+Invariant:
+    'invariant' name=FeatureName ':' expr=STRING ('message' message=STRING)?;
+
+// A query the kind's elements answer, for invariants and derived features to use:
+// query allParents(): Classifier [0..*] = "generalizations.general->…"
+QueryOperation:
+    'query' name=FeatureName '(' (params+=QueryParameter (',' params+=QueryParameter)*)? ')'
+        ':' returns=AnyTypeRef multiplicity=Multiplicity? '=' body=STRING;
+QueryParameter:
+    name=FeatureName ':' type=AnyTypeRef multiplicity=Multiplicity?;
+// A primitive type, or an enum, datatype or kind by name.
+AnyTypeRef: PrimitiveTypeRef | AnyNamedTypeRef;
+AnyNamedTypeRef: decl=[AnyTypeDecl:QualifiedName];
+AnyTypeDecl: EnumDecl | DataTypeDecl | Kind;
 
 // prop tableName: string = "users"
 // readonly prop qualifiedName: string [0..1]
@@ -59,7 +79,13 @@ Modifier returns string:
 // the target kind's feature pointing back, the features of this kind whose values
 // this feature's include, and the inherited features it replaces.
 FeatureClause:
-    OppositeClause | SubsetsClause | RedefinesClause;
+    OppositeClause | SubsetsClause | RedefinesClause | DeriveClause | PlaysClause;
+// The parts it plays for the tools (ROLES in @arbor/ir): `contains attributes: Property [0..*] plays attributes`.
+PlaysClause:
+    'plays' roles+=FeatureName (',' roles+=FeatureName)*;
+// How a derived feature is worked out, in the expression language: derived prop qualifiedName: string derive "…"
+DeriveClause:
+    'derive' expr=STRING;
 OppositeClause:
     'opposite' feature=FeatureName;
 SubsetsClause:
@@ -72,7 +98,8 @@ EdgeVisual:
     '{' (entries+=VisualEntry)* '}';
 
 TypeRef: PrimitiveTypeRef | NamedTypeRef;
-PrimitiveTypeRef: primitive=('string' | 'int' | 'float' | 'bool');
+// `expr` and `action` hold text in the expression language (docs/EXPRESSIONS.md): a query, or statements.
+PrimitiveTypeRef: primitive=('string' | 'int' | 'float' | 'bool' | 'expr' | 'action');
 // An enum or a datatype, by name.
 NamedTypeRef: decl=[TypeDecl:QualifiedName];
 TypeDecl: EnumDecl | DataTypeDecl;
@@ -126,7 +153,7 @@ Model:
 Element:
     (feature=FeatureName '+=')?
     (('<<' | '«') stereotypes+=[StereotypeDecl:QualifiedName] (',' stereotypes+=[StereotypeDecl:QualifiedName])* ('>>' | '»'))?
-    kind=[Kind:QualifiedName] name=ID? ('@' stableId=STRING)? '{'
+    kind=[Kind:QualifiedName] name=ElementName? ('@' stableId=STRING)? '{'
         (slots+=Slot | children+=Element)*
     '}';
 
@@ -134,7 +161,7 @@ Slot:
     name=FeatureName ':' value=Value;
 
 Value: Literal | RefValue | ListValue | RecordValue;
-RefValue: '->' target=[Element:QualifiedName];
+RefValue: '->' target=[Element:ElementPath];
 ListValue: '[' (items+=Value (',' items+=Value)*)? ']';
 // A datatype's value: its fields, like an element's slots.
 RecordValue: '{' (slots+=Slot)* '}';
@@ -149,13 +176,20 @@ IdLit: value=ID;   // enum literals
 QualifiedName returns string:
     ID ('.' ID)*;
 
+// An element's name: an identifier, or any text in quotes (`"Order Line"`, `"operator+"`, `"model"`).
+ElementName returns string:
+    ID | STRING;
+// A path to an element: `Checkout.OrderApi`, `shop."Order Line".total`.
+ElementPath returns string:
+    ElementName ('.' ElementName)*;
+
 // Keywords are still allowed as feature/slot names (e.g. `version: "1.0"`).
 FeatureName returns string:
     ID | 'version' | 'kind' | 'model' | 'profile' | 'visual' | 'enum'
        | 'abstract' | 'extends' | 'prop' | 'contains' | 'ref'
-       | 'string' | 'int' | 'float' | 'bool'
+       | 'string' | 'int' | 'float' | 'bool' | 'expr' | 'action'
        | 'ordered' | 'unique' | 'readonly' | 'derived' | 'opposite' | 'subsets' | 'redefines' | 'datatype' | 'stereotype'
-       | 'when';
+       | 'when' | 'invariant' | 'message' | 'query' | 'derive' | 'part' | 'plays';
 
 // ======================================================================
 // Terminals

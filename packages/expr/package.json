@@ -1,0 +1,12 @@
+{
+  "name": "@arbor/expr",
+  "version": "0.1.0",
+  "description": "The arbor expression language: OCL-style queries and a small action language, parsed, type-checked and interpreted. No eval.",
+  "type": "module",
+  "main": "out/index.js",
+  "types": "out/index.d.ts",
+  "exports": { ".": "./out/index.js" },
+  "dependencies": {
+    "@arbor/ir": "0.1.0"
+  }
+}

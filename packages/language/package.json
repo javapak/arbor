@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@arbor/adapter-flow": "0.1.0",
+    "@arbor/expr": "0.1.0",
     "@arbor/ir": "0.1.0",
     "langium": "~4.4.2",
     "vscode-languageserver": "~10.1.2"

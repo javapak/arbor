@@ -5,34 +5,53 @@
  * rather than thrown on, so a partially broken workspace still produces a
  * renderable IR.
  */
+import { deriveExpressions, type DeriveFailure } from '@arbor/expr';
 import {
     IR_VERSION, deriveReferences,
-    type IRFeatureModifiers,
+    type IRFeatureModifiers, type IRMultiplicity, type IRTypeRef,
     type IRDocument, type IRElement, type IRFeature, type IRKind, type IRModel, type IRProfile, type IRProperty, type IRRecord,
     type IRScalar, type IRValue
 } from '@arbor/ir';
-import type { Element, Feature, Kind, Model, Profile, Value, Visual } from '../language/generated/ast.js';
-import { isDataTypeDecl, isListValue, isModel, isProfile, isRecordValue, isRefValue, type RecordValue } from '../language/generated/ast.js';
+import type { AnyTypeRef, Element, Feature, Kind, Model, Multiplicity, Profile, Value, Visual } from '../language/generated/ast.js';
+import { isKind, isDataTypeDecl, isListValue, isModel, isProfile, isRecordValue, isRefValue, type RecordValue } from '../language/generated/ast.js';
 import {
-    bounds, containmentOf, elementFeatures, elementId, enumId, hasModifier, kindId, literalValue,
+    bounds, containmentOf, deriveOf, rolesOf, elementFeatures, elementId, enumId, hasModifier, kindId, literalValue,
     oppositeOf, redefinesOf, subsetsOf
 } from '../language/semantics.js';
 
 export function toIR(roots: Array<Profile | Model>): IRDocument {
-    const profiles = roots.filter(isProfile).map(profileToIR);
+    return toIRWithFailures(roots).ir;
+}
+
+/** The IR, and the derived features whose `derive` expressions failed (left without values). */
+export function toIRWithFailures(roots: Array<Profile | Model>): { ir: IRDocument; failures: DeriveFailure[] } {
+    const given = roots.filter(isProfile);
     const models = roots.filter(isModel).map(modelToIR);
 
-    // Self-describing: include every profile a model actually uses, even if
+    // Self-describing: include every profile (part) a model actually uses, even if
     // the caller only passed the model.
-    const have = new Set(profiles.map(p => p.name));
+    const have = new Set<Profile>(given);
     for (const m of roots.filter(isModel)) {
         for (const kind of kindsUsed(m)) {
-            const p = kind.$container;
-            if (!have.has(p.name)) { have.add(p.name); profiles.push(profileToIR(p)); }
+            if (!have.has(kind.$container)) { have.add(kind.$container); given.push(kind.$container); }
         }
     }
-    // Derived references are computed once every model and profile is in.
-    return deriveReferences({ irVersion: IR_VERSION, profiles, models });
+    // A profile written in parts is one profile.
+    const profiles: IRProfile[] = [];
+    for (const part of given.map(profileToIR)) {
+        const same = profiles.find(p => p.name === part.name);
+        if (!same) { profiles.push(part); continue; }
+        same.kinds.push(...part.kinds);
+        same.enums.push(...part.enums);
+        (same.stereotypes ??= []).push(...(part.stereotypes ?? []));
+        (same.datatypes ??= []).push(...(part.datatypes ?? []));
+        if (!same.version && part.version) same.version = part.version;
+    }
+    // Derived references are computed once every model and profile is in; then derived features'
+    // expressions, which may read those.
+    const ir = deriveReferences({ irVersion: IR_VERSION, profiles, models });
+    const failures = deriveExpressions(ir);
+    return { ir, failures };
 }
 
 // ------------------------------------------------------------ profiles
@@ -73,8 +92,33 @@ function kindToIR(k: Kind): IRKind {
         extends: k.supers.flatMap(s => (s.ref ? [kindId(s.ref)] : [])),
         features: k.features.flatMap(featureToIR),
         visual,
-        ...(visualWhen.length ? { visualWhen } : {})
+        ...(visualWhen.length ? { visualWhen } : {}),
+        ...(k.roles.length ? { roles: k.roles } : {}),
+        ...(k.invariants.length ? { invariants: k.invariants.map(i => ({ name: i.name, expr: i.expr, ...(i.message ? { message: i.message } : {}) })) } : {}),
+        ...(k.operations.length ? {
+            operations: k.operations.map(o => ({
+                name: o.name,
+                params: o.params.map(p => ({ name: p.name, type: typeRefToIR(p.type), multiplicity: oneOrMore(p.multiplicity) })),
+                returns: typeRefToIR(o.returns),
+                multiplicity: oneOrMore(o.multiplicity),
+                body: o.body,
+            })),
+        } : {})
     };
+}
+
+/** A query's parameter or result type: a primitive, or an enum, datatype or kind by ID. */
+function typeRefToIR(t: AnyTypeRef): IRTypeRef {
+    if (t.$type === 'PrimitiveTypeRef') return t.primitive;
+    const d = t.decl.ref;
+    if (isKind(d)) return { kind: kindId(d) };
+    if (isDataTypeDecl(d)) return { datatype: enumId(d) };
+    return d ? { enum: enumId(d) } : 'string';
+}
+
+/** A query's multiplicity: one, unless it says otherwise. */
+function oneOrMore(m: Multiplicity | undefined): IRMultiplicity {
+    return m ? bounds(m, 'PropFeature') : { lower: 1, upper: 1 };
 }
 
 /** The modifiers a feature sets, as IR fields (absent when not set). */
@@ -85,6 +129,9 @@ function modifiersToIR(f: Feature): IRFeatureModifiers {
     if (opposite) out.opposite = opposite;
     if (subsetsOf(f).length) out.subsets = subsetsOf(f);
     if (redefinesOf(f).length) out.redefines = redefinesOf(f);
+    const derive = deriveOf(f);
+    if (derive) out.derive = derive;
+    if (rolesOf(f).length) out.roles = rolesOf(f);
     return out;
 }
 

@@ -101,8 +101,49 @@
               "visual": { "type": "object", "additionalProperties": { "$ref": "#/$defs/scalar" } }
             }
           }
+        },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "invariants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "expr"],
+            "additionalProperties": false,
+            "properties": { "name": { "type": "string" }, "expr": { "type": "string" }, "message": { "type": "string" } }
+          }
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "params", "returns", "multiplicity", "body"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "params": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "type", "multiplicity"],
+                  "additionalProperties": false,
+                  "properties": { "name": { "type": "string" }, "type": { "$ref": "#/$defs/typeRef" }, "multiplicity": { "$ref": "#/$defs/multiplicity" } }
+                }
+              },
+              "returns": { "$ref": "#/$defs/typeRef" },
+              "multiplicity": { "$ref": "#/$defs/multiplicity" },
+              "body": { "type": "string" }
+            }
+          }
         }
       }
+    },
+    "typeRef": {
+      "oneOf": [
+        { "enum": ["string", "int", "float", "bool", "expr", "action"] },
+        { "type": "object", "required": ["enum"], "additionalProperties": false, "properties": { "enum": { "type": "string" } } },
+        { "type": "object", "required": ["datatype"], "additionalProperties": false, "properties": { "datatype": { "type": "string" } } },
+        { "type": "object", "required": ["kind"], "additionalProperties": false, "properties": { "kind": { "type": "string" } } }
+      ]
     },
     "feature": {
       "oneOf": [
@@ -115,7 +156,7 @@
             "name": { "type": "string" },
             "type": {
               "oneOf": [
-                { "enum": ["string", "int", "float", "bool"] },
+                { "enum": ["string", "int", "float", "bool", "expr", "action"] },
                 {
                   "type": "object",
                   "required": ["enum"],
@@ -136,6 +177,8 @@
             "unique": { "const": true },
             "readonly": { "const": true },
             "derived": { "const": true },
+            "derive": { "type": "string" },
+            "roles": { "type": "array", "items": { "type": "string" } },
             "subsets": { "type": "array", "items": { "type": "string" } },
             "redefines": { "type": "array", "items": { "type": "string" } }
           }
@@ -155,6 +198,8 @@
             "unique": { "const": true },
             "readonly": { "const": true },
             "derived": { "const": true },
+            "derive": { "type": "string" },
+            "roles": { "type": "array", "items": { "type": "string" } },
             "subsets": { "type": "array", "items": { "type": "string" } },
             "redefines": { "type": "array", "items": { "type": "string" } }
           }

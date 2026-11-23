@@ -8,10 +8,13 @@ import Editor from './Editor';
 import DiagramPane from './DiagramPane';
 import DiagramTrail from './DiagramTrail';
 import DiagramTitle from './DiagramTitle';
+import { Simulator } from '@arbor/simulator-ui';
+import { machineOf } from '@arbor/statemachine';
 import Toolbar from './Toolbar';
 
 export default function Studio() {
-  const { files, active, diagnostics, notice, setFile, setActive, setNotice, reset, ir, root, setRoot } = useStudio();
+  const { files, active, diagnostics, notice, setFile, setActive, setNotice, reset, ir, root, setRoot, simulating, setSimulating, setHighlight } = useStudio();
+  const inMachine = !!ir && !!root && !!machineOf(ir, root);
   const [reveal, setReveal] = useState<{ line: number; column: number; n: number }>();
   const errors = diagnostics.filter(d => d.severity === 'error').length;
 
@@ -77,6 +80,11 @@ export default function Studio() {
               <div style={{ position: 'relative', height: '100%' }}>
                 <DiagramPane />
                 <DiagramTitle ir={ir} root={root} />
+                {simulating && inMachine && ir && (
+                  <div style={{ position: 'absolute', left: 12, bottom: notice ? 60 : 12 }}>
+                    <Simulator ir={ir} root={root} onHighlight={setHighlight} onClose={() => setSimulating(false)} />
+                  </div>
+                )}
                 <Toolbar />
                 <div style={{ position: 'absolute', top: 12, left: 12 }}>
                   <DiagramTrail ir={ir} root={root} open={setRoot} />

@@ -9,18 +9,25 @@
  * Checks are a fixed set of handlers selected by profile data. Profiles never
  * supply code.
  */
-import { AstUtils, type AstNode, type IndexManager, type ValidationAcceptor, type ValidationChecks } from 'langium';
+import { AstUtils, GrammarUtils, type AstNode, type AstNodeDescription, type CstNode, type IndexManager, type LangiumDocuments, type ValidationAcceptor, type ValidationChecks } from 'langium';
+import type { Range } from 'vscode-languageserver-types';
+import {
+    BOOLEAN, EvalError, checkBlock, checkExpression, classWorld, evaluate, expressionBindings, expressionContext, irTypeSpace, irValueSpace,
+    parseBlock, parseExpression, type CheckContext, type ClassWorld, type DeriveFailure, type ExprDiagnostic, type ExpressionBinding,
+} from '@arbor/expr';
+import type { IRDocument } from '@arbor/ir';
+import { toIRWithFailures } from '../ir/ast-to-ir.js';
 import type {
     ContainsFeature, DataTypeDecl, EdgeVisual, Element, Feature, RecordValue, StereotypeDecl, Kind, ArborAstType, Model, Multiplicity, Profile, PropFeature, Slot, Value, Visual, VisualEntry
 } from './generated/ast.js';
-import { isElement, isListValue, isRecordValue, isRefValue } from './generated/ast.js';
-import { EDGE_VISUAL_KEYS, OWNER_END, STRUCTURAL_VISUALS, VISUAL_KEYS, checkVisualValue, type VisualKeySpec } from '@arbor/ir';
+import { isElement, isEnumDecl, isKind, isListValue, isModel, isProfile, isRecordValue, isRefValue, isStringLit, type StringLit } from './generated/ast.js';
+import { EDGE_VISUAL_KEYS, OWNER_END, ROLES, STRUCTURAL_VISUALS, VISUAL_KEYS, checkVisualValue, isRole, type RoleSpec, type VisualKeySpec } from '@arbor/ir';
 import type { ArborServices } from './arbor-module.js';
 import type { ArborScopeProvider } from './arbor-scope.js';
 import {
     allFeatures, bounds, checkLiteral, closest, containmentCandidates, datatypeOf, elementFeatures, stereotypeApplies,
     displayName, elementId, findInheritanceCycle, hasModifier, isA, isRequired, lineage, literalValue,
-    oppositeOf, redefinesOf, subsetsOf
+    containmentOf, deriveOf, kindId, oppositeOf, redefinesOf, rolesOf, subsetsOf
 } from './semantics.js';
 
 export const DiagnosticCode = {
@@ -38,6 +45,8 @@ export const DiagnosticCode = {
     BadRedefines: 'ARB011',
     BadStereotype: 'ARB012',
     BadVisualCondition: 'ARB013',
+    BadDerive: 'ARB014',
+    BadRole: 'ARB015',
     // models
     AbstractInstance: 'ARB101',
     UnknownSlot: 'ARB102',
@@ -51,7 +60,10 @@ export const DiagnosticCode = {
     DuplicateId: 'ARB110',
     DuplicateValue: 'ARB111',
     OppositeMismatch: 'ARB112',
-    StereotypeNotApplicable: 'ARB113'
+    StereotypeNotApplicable: 'ARB113',
+    NotContained: 'ARB114',
+    BrokenInvariant: 'ARB115',
+    DeriveFailed: 'ARB116'
 } as const;
 
 export function registerValidationChecks(services: ArborServices): void {
@@ -74,21 +86,63 @@ export function registerValidationChecks(services: ArborServices): void {
 export class ArborValidator {
     private readonly scopes: ArborScopeProvider;
     private readonly index: IndexManager;
+    private readonly documents: LangiumDocuments;
+    /** The workspace as IR, and what's built from it, for the documents as they are now. */
+    private cache: {
+        key: string; ir: IRDocument; failures: DeriveFailure[];
+        types: ReturnType<typeof irTypeSpace>; values: ReturnType<typeof irValueSpace>; worlds: Map<string, ClassWorld>;
+        bindings: ExpressionBinding[];
+    } | undefined;
 
     constructor(services: ArborServices) {
         this.scopes = services.references.ScopeProvider;
         this.index = services.shared.workspace.IndexManager;
+        this.documents = services.shared.workspace.LangiumDocuments;
     }
 
     /** Profile and model names qualify everything inside them, so they must be unique workspace-wide. */
     private checkUniqueRoot(root: Profile | Model, accept: ValidationAcceptor): void {
         const uri = AstUtils.getDocument(root).uri.toString();
-        const other = this.index.allElements(root.$type)
-            .find(d => d.name === root.name && d.type === root.$type && d.documentUri.toString() !== uri);
-        if (other) {
-            accept('error', `Another ${root.$type.toLowerCase()} named '${root.name}' is defined in ${other.documentUri.path.replace(/^\//, '')}.`,
+        const others = this.index.allElements(root.$type)
+            .filter(d => d.name === root.name && d.type === root.$type && d.documentUri.toString() !== uri).toArray();
+        const where = (d: AstNodeDescription) => d.documentUri.path.replace(/^\//, '');
+        if (isProfile(root)) {
+            // Parts of one profile: each names itself, differently, and they agree on the version.
+            for (const d of others) {
+                const other = this.nodeOf(d);
+                if (!isProfile(other)) continue;
+                if (!root.part || !other.part) {
+                    accept('error', `Another profile named '${root.name}' is defined in ${where(d)}. To write one profile in several files, name each part: profile ${root.name} part "…" { … }.`,
+                        { node: root, property: 'name', code: DiagnosticCode.DuplicateName });
+                } else if (root.part === other.part) {
+                    accept('error', `Profile ${root.name} has another part "${root.part}", in ${where(d)}.`,
+                        { node: root, property: 'part', code: DiagnosticCode.DuplicateName });
+                } else if (root.version && other.version && root.version !== other.version) {
+                    accept('error', `Part "${other.part}" of ${root.name} says version "${other.version}", this one "${root.version}".`,
+                        { node: root, property: 'version', code: DiagnosticCode.DuplicateName });
+                }
+            }
+            // A name is defined once in the whole profile.
+            for (const decl of [...root.kinds, ...root.enums, ...root.datatypes, ...root.stereotypes]) {
+                const twin = this.index.allElements(decl.$type)
+                    .find(d => d.name === `${root.name}.${decl.name}` && d.documentUri.toString() !== uri);
+                if (twin) {
+                    accept('error', `${decl.name} is also defined in another part of ${root.name}, in ${where(twin)}.`,
+                        { node: decl, property: 'name', code: DiagnosticCode.DuplicateName });
+                }
+            }
+            return;
+        }
+        if (others.length) {
+            accept('error', `Another ${root.$type.toLowerCase()} named '${root.name}' is defined in ${where(others[0])}.`,
                 { node: root, property: 'name', code: DiagnosticCode.DuplicateName });
         }
+    }
+
+    private nodeOf(d: AstNodeDescription): AstNode | undefined {
+        if (d.node) return d.node;
+        if (!this.documents.hasDocument(d.documentUri)) return undefined;
+        return this.documents.getDocument(d.documentUri)!.parseResult.value;
     }
 
     /** A simple name that several profiles (or models) define must be qualified. */
@@ -128,6 +182,8 @@ export class ArborValidator {
                 { node: kind, property: 'supers', code: DiagnosticCode.InheritanceCycle });
             return;
         }
+        this.checkKindExpressions(kind, accept);
+        this.checkRoles(kind, accept);
         const own = new Set<string>();
         for (const f of kind.features) {
             if (own.has(f.name)) {
@@ -221,7 +277,9 @@ export class ArborValidator {
                 continue;
             }
             if (sup === f) { fail(`'${f.name}' cannot subset itself.`); continue; }
-            const problem = this.featureMismatch(f, sup);
+            // A reference may subset a containment (it picks among what that holds, like UML's classifierBehavior),
+            // and a containment a reference (a derived union of members, like UML's Classifier::attribute).
+            const problem = this.featureMismatch(f, sup, true);
             if (problem) { fail(`'${f.name}' cannot subset '${name}': ${problem}.`); continue; }
             const mine = bounds(f.multiplicity, f.$type).upper, theirs = bounds(sup.multiplicity, sup.$type).upper;
             if (theirs !== null && (mine === null || mine > theirs)) {
@@ -252,8 +310,10 @@ export class ArborValidator {
     }
 
     /** Why `f`'s values can't stand for `g`'s: a different sort of feature, or a type that isn't g's (or a kind of it). */
-    private featureMismatch(f: Feature, g: Feature): string | undefined {
-        if (f.$type !== g.$type) return `one is a ${sortOf(f)}, the other a ${sortOf(g)}`;
+    /** Why `f` can't subset or redefine `g`, if it can't. `across`: a reference and a containment may subset each other. */
+    private featureMismatch(f: Feature, g: Feature, across = false): string | undefined {
+        const elementsBoth = f.$type !== 'PropFeature' && g.$type !== 'PropFeature';
+        if (f.$type !== g.$type && !(across && elementsBoth)) return `one is a ${sortOf(f)}, the other a ${sortOf(g)}`;
         if (f.$type === 'PropFeature' && g.$type === 'PropFeature') {
             const type = (p: PropFeature) => (p.type.$type === 'PrimitiveTypeRef' ? p.type.primitive : p.type.decl.ref);
             return type(f) === type(g) ? undefined : 'their types differ';
@@ -395,6 +455,7 @@ export class ArborValidator {
     checkElement(el: Element, accept: ValidationAcceptor): void {
         const kind = el.kind.ref;
         if (!kind) return; // unresolved kind is already reported by the linker
+        this.checkInvariants(el, kind, accept);
 
         if (kind.abstract) {
             accept('error', `Kind ${kind.name} is abstract and cannot be instantiated.`,
@@ -495,6 +556,33 @@ export class ArborValidator {
             return fail(`'${name}' of ${kind.name} holds ${target.name} elements, not ${childKind.name}.${fix ? ` Did you mean '${fix}'?` : ''}`, fix);
         }
         return target ? f : undefined;
+    }
+
+    /**
+     * A reference that subsets a containment names only elements that containment holds
+     * (UML: a class's classifierBehavior is one of its ownedBehaviors).
+     */
+    private checkSubsetsContainment(slot: Slot, f: import('./generated/ast.js').RefFeature, features: Map<string, Feature>, accept: ValidationAcceptor): void {
+        const el = slot.$container;
+        if (!isElement(el)) return;
+        for (const name of subsetsOf(f)) {
+            const sup = features.get(name);
+            if (sup?.$type !== 'ContainsFeature') continue;
+            // What it holds: its children, and those of the containments that subset it.
+            const reaches = (g: Feature | undefined, seen = new Set<string>()): boolean => {
+                if (!g || seen.has(g.name)) return false;
+                if (g.name === name) return true;
+                seen.add(g.name);
+                return subsetsOf(g).some(s => reaches(features.get(s), seen));
+            };
+            const held = el.children.filter(c => reaches(containmentOf(c)));
+            for (const v of isListValue(slot.value) ? slot.value.items : [slot.value]) {
+                const target = isRefValue(v) ? v.target.ref : undefined;
+                if (!isElement(target) || held.includes(target)) continue;
+                accept('error', `'${slot.name}' subsets '${name}', so it names one of the elements this ${el.kind.ref?.name ?? 'element'} holds there; ${displayName(target)} isn't.`,
+                    { node: v, code: DiagnosticCode.NotContained, data: { candidates: held.map(c => c.name).filter(Boolean) } });
+            }
+        }
     }
 
     /**
@@ -618,7 +706,10 @@ export class ArborValidator {
                 seen.add(key);
             }
         }
-        if (f.$type === 'RefFeature') this.checkOppositeValues(slot, f, accept);
+        if (f.$type === 'RefFeature') {
+            this.checkOppositeValues(slot, f, accept);
+            this.checkSubsetsContainment(slot, f, features, accept);
+        }
 
         for (const v of items) {
             if (f.$type === 'RefFeature') {
@@ -652,12 +743,175 @@ export class ArborValidator {
                 if (problem) {
                     accept('error', `'${slot.name}': ${problem}.`,
                         { node: v, code: DiagnosticCode.TypeMismatch });
+                } else if (isStringLit(v) && f.type.$type === 'PrimitiveTypeRef' && (f.type.primitive === 'expr' || f.type.primitive === 'action')) {
+                    this.checkExpressionSlot(slot, f, v, f.type.primitive === 'action', accept);
                 }
             }
+        }
+    }
+
+    /**
+     * An `expr` or `action` slot: its text parses; and, where its profile's binding names the slot,
+     * it type-checks against what `self` is there (see @arbor/expr's binding.ts). Problems point into the string.
+     */
+    private checkExpressionSlot(slot: Slot, f: PropFeature, lit: StringLit, action: boolean, accept: ValidationAcceptor): void {
+        const report = (ds: ExprDiagnostic[]) => {
+            for (const d of ds) accept(d.severity, d.message, { node: lit, range: rangeInString(lit, d.start, d.end), code: d.code });
+        };
+        const parsed = action ? parseBlock(lit.value) : parseExpression(lit.value);
+        if (!parsed.value) return report(parsed.diagnostics);
+        const owner = AstUtils.getContainerOfType(f, isKind);
+        const profile = owner && AstUtils.getContainerOfType(owner, isProfile)?.name;
+        const binding = this.workspace().bindings.find(b => b.profile === profile);
+        const el = slot.$container;
+        if (!binding || !isElement(el)) return;
+        const world = this.worldOf(binding);
+        const irElement = world.index.elements.get(elementId(el));
+        const ctx = irElement && expressionContext(world, binding, irElement, slot.name);
+        if (!ctx) return;
+        const value = parsed.value;
+        report('statements' in value ? checkBlock(value, ctx).diagnostics : checkExpression(value, ctx).diagnostics);
+    }
+
+    /** The classes the workspace's models describe, for a binding: rebuilt when a document changes. */
+    private workspace() {
+        const docs = this.documents.all.toArray();
+        const key = docs.map(d => `${d.uri.toString()}@${d.textDocument.version}`).join('|');
+        if (this.cache?.key !== key) {
+            const roots = docs.map(d => d.parseResult.value).filter((r): r is Profile | Model => isProfile(r) || isModel(r));
+            const { ir, failures } = toIRWithFailures(roots);
+            this.cache = { key, ir, failures, types: irTypeSpace(ir), values: irValueSpace(ir), worlds: new Map(), bindings: expressionBindings(ir) };
+        }
+        return this.cache;
+    }
+
+    private worldOf(binding: ExpressionBinding): ClassWorld {
+        const w = this.workspace();
+        let world = w.worlds.get(binding.profile);
+        if (!world) w.worlds.set(binding.profile, world = classWorld(w.ir, binding));
+        return world;
+    }
+
+    /** Roles (`plays`) are ones the tools know (ROLES), played by the sort of kind or feature they're for. */
+    private checkRoles(kind: Kind, accept: ValidationAcceptor): void {
+        const known = Object.keys(ROLES);
+        const fail = (node: AstNode, message: string, fix?: string) =>
+            accept('error', message, { node, code: DiagnosticCode.BadRole, data: { fix } });
+        const check = (role: string, node: AstNode, on: 'kind' | 'contains' | 'ref' | 'prop', type?: string): void => {
+            if (!isRole(role)) {
+                const fix = closest(role, known.filter(r => (ROLES as Record<string, RoleSpec>)[r].on === on));
+                return fail(node, `There's no role '${role}'.${fix ? ` Did you mean '${fix}'?` : ''}`, fix);
+            }
+            const spec: RoleSpec = ROLES[role];
+            const what = { kind: 'a kind', contains: 'a containment', ref: 'a reference', prop: 'a property' };
+            if (spec.on !== on) return fail(node, `'${role}' is played by ${what[spec.on]}, not ${what[on]}.`);
+            if (spec.type && type !== spec.type) fail(node, `'${role}' is played by a property of type ${spec.type}, not ${type ?? 'a datatype'}.`);
+        };
+        for (const role of kind.roles) check(role, kind, 'kind');
+        for (const f of kind.features) {
+            const clause = f.clauses.find(c => c.$type === 'PlaysClause');
+            if (!clause) continue;
+            const on = f.$type === 'PropFeature' ? 'prop' : f.$type === 'ContainsFeature' ? 'contains' : 'ref';
+            const type = f.$type !== 'PropFeature' ? undefined
+                : f.type.$type === 'PrimitiveTypeRef' ? f.type.primitive : isEnumDecl(f.type.decl.ref) ? 'enum' : undefined;
+            for (const role of rolesOf(f)) check(role, clause, on, type);
+        }
+    }
+
+    // ================================================================ rules in profiles
+
+    /**
+     * A kind's invariants, derived features' `derive` and queries' bodies: expressions about one of
+     * its elements, checked against the profiles (kinds as classes); problems point into the string.
+     */
+    private checkKindExpressions(kind: Kind, accept: ValidationAcceptor): void {
+        const { types } = this.workspace();
+        const self = types.classOf(kindId(kind));
+        const check = (node: AstNode, property: string, text: string, ctx: Omit<CheckContext, 'space' | 'self'>) => {
+            const parsed = parseExpression(text);
+            const ds = parsed.value ? checkExpression(parsed.value, { space: types, self, mode: 'query', ...ctx }).diagnostics : parsed.diagnostics;
+            for (const d of ds) accept(d.severity, d.message, { node, range: rangeInProperty(node, property, d.start, d.end), code: d.code });
+        };
+        for (const inv of kind.invariants) check(inv, 'expr', inv.expr, { expected: BOOLEAN });
+        for (const f of kind.features) {
+            const clause = f.clauses.find(c => c.$type === 'DeriveClause');
+            if (!clause || clause.$type !== 'DeriveClause') continue;
+            if (!hasModifier(f, 'derived')) {
+                accept('error', `'${f.name}' has an expression to work it out, so it's derived: write 'derived' before it.`,
+                    { node: clause, code: DiagnosticCode.BadDerive });
+                continue;
+            }
+            if (f.$type !== 'PropFeature' && oppositeOf(f)) {
+                accept('error', `'${f.name}' is worked out from its opposite already; it can't also have an expression.`,
+                    { node: clause, code: DiagnosticCode.BadDerive });
+                continue;
+            }
+            const expected = types.property(kindId(kind), f.name)?.type;
+            check(clause, 'expr', clause.expr, expected ? { expected } : {});
+        }
+        for (const op of kind.operations) {
+            const info = types.operation(kindId(kind), op.name);
+            const variables = Object.fromEntries((info?.params ?? []).map(p => [p.name, p.type]));
+            check(op, 'body', op.body, { variables, ...(info ? { expected: info.returns } : {}) });
+        }
+    }
+
+    /** The invariants of an element's kind (its ancestors' too) hold for it, and its derived features could be worked out. */
+    private checkInvariants(el: Element, kind: Kind, accept: ValidationAcceptor): void {
+        const rules = lineage(kind).flatMap(k => k.invariants.map(inv => ({ inv, k })));
+        const derives = [...allFeatures(kind).values()].some(f => deriveOf(f));
+        if (!rules.length && !derives) return;
+        const { values, failures } = this.workspace();
+        const id = elementId(el);
+        const irElement = values.element(id);
+        if (!irElement) return;
+        const name = el.name ? `${kind.name} ${el.name}` : `This ${kind.name}`;
+        for (const { inv, k } of rules) {
+            const parsed = parseExpression(inv.expr);
+            if (!parsed.value) continue;   // reported on the profile
+            try {
+                const kept = evaluate(parsed.value, { space: values, self: irElement });
+                if (kept !== true) {
+                    accept('error', `${name} breaks '${inv.name}'${k !== kind ? ` (of ${k.name})` : ''}: ${inv.message ?? inv.expr}`,
+                        { node: el, property: el.name ? 'name' : 'kind', code: DiagnosticCode.BrokenInvariant, data: { invariant: inv.name } });
+                }
+            } catch (e) {
+                if (!(e instanceof EvalError)) throw e;
+                accept('warning', `'${inv.name}' couldn't be checked for ${name}: ${e.message}`,
+                    { node: el, property: el.name ? 'name' : 'kind', code: DiagnosticCode.BrokenInvariant });
+            }
+        }
+        for (const f of failures.filter(x => x.element === id)) {
+            accept('warning', `'${f.feature}' of ${name} couldn't be worked out: ${f.message}`,
+                { node: el, property: el.name ? 'name' : 'kind', code: DiagnosticCode.DeriveFailed });
         }
     }
 }
 
 function sortOf(f: Feature): string {
     return f.$type === 'PropFeature' ? 'property' : f.$type === 'RefFeature' ? 'reference' : 'containment';
+}
+
+/**
+ * The range of characters `start` to `end` of a string literal's value, in its document: past the opening
+ * quote, counting an escape (`\"`) as the one character it stands for.
+ */
+function rangeInString(lit: StringLit, start: number, end: number): Range {
+    return rangeInText(lit.$cstNode!, start, end);
+}
+
+/** The same, for a string held by a node's property (an invariant's `expr`, a query's `body`). */
+function rangeInProperty(node: AstNode, property: string, start: number, end: number): Range {
+    const cst = GrammarUtils.findNodeForProperty(node.$cstNode, property) ?? node.$cstNode!;
+    return rangeInText(cst, start, end);
+}
+
+function rangeInText(cst: CstNode, start: number, end: number): Range {
+    const raw = cst.text;
+    const at: number[] = [];   // value index -> offset in raw
+    for (let i = 1; i < raw.length - 1; i += raw[i] === '\\' ? 2 : 1) at.push(i);
+    at.push(raw.length - 1);
+    const offset = (k: number) => cst.offset + (at[Math.min(k, at.length - 1)] ?? 1);
+    const doc = AstUtils.getDocument(cst.astNode).textDocument;
+    return { start: doc.positionAt(offset(start)), end: doc.positionAt(offset(Math.max(end, start))) };
 }

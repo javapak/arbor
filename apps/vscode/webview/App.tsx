@@ -7,9 +7,12 @@ import DiagramPane from './DiagramPane';
 import Toolbar from './Toolbar';
 import DiagramTrail from './DiagramTrail';
 import DiagramTitle from './DiagramTitle';
+import { Simulator } from '@arbor/simulator-ui';
+import { machineOf } from '@arbor/statemachine';
 
 export default function App() {
-    const { kind, errors, notice, setNotice, ir, root, setRoot } = useDiagramStore();
+    const { kind, errors, notice, setNotice, ir, root, setRoot, simulating, setSimulating, setHighlight } = useDiagramStore();
+    const inMachine = !!ir && !!root && !!machineOf(ir, root);
     if (ir && kind !== 'model') {
         return (
             <Text p="md" c="dimmed">
@@ -26,6 +29,11 @@ export default function App() {
                     <div style={{ position: 'relative', height: '100%' }}>
                         <DiagramPane />
                         <DiagramTitle ir={ir} root={root} />
+                        {simulating && inMachine && ir && (
+                            <div style={{ position: 'absolute', left: 12, bottom: notice ? 60 : 12 }}>
+                                <Simulator ir={ir} root={root} onHighlight={setHighlight} onClose={() => setSimulating(false)} />
+                            </div>
+                        )}
                         <Toolbar />
                         <Group gap={8} wrap="nowrap" style={{ position: 'absolute', top: 12, left: 12 }}>
                             <DiagramTrail ir={ir} root={root} open={setRoot} />

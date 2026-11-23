@@ -102,6 +102,17 @@ export function subsetsOf(f: Feature): string[] {
     return f.clauses.flatMap(c => (c.$type === 'SubsetsClause' ? c.features : []));
 }
 
+/** The roles a feature plays (`plays attributes`). */
+export function rolesOf(f: Feature): string[] {
+    return f.clauses.flatMap(c => (c.$type === 'PlaysClause' ? c.roles : []));
+}
+
+/** A derived feature's expression, `derive "…"`, if it has one. */
+export function deriveOf(f: Feature): string | undefined {
+    for (const c of f.clauses) if (c.$type === 'DeriveClause') return c.expr;
+    return undefined;
+}
+
 export function redefinesOf(f: Feature): string[] {
     return f.clauses.flatMap(c => (c.$type === 'RedefinesClause' ? c.features : []));
 }
@@ -197,6 +208,7 @@ export function checkLiteral(prop: PropFeature, l: Literal): string | undefined 
     }
     switch (t.primitive) {
         case 'string': return l.$type === 'StringLit' ? undefined : 'expected a string in double quotes';
+        case 'expr': case 'action': return l.$type === 'StringLit' ? undefined : 'expected an expression in double quotes';
         case 'bool': return l.$type === 'BoolLit' ? undefined : 'expected true or false';
         case 'float': return l.$type === 'NumberLit' ? undefined : 'expected a number';
         case 'int':
@@ -227,6 +239,16 @@ export function enumId(e: EnumDecl | DataTypeDecl | StereotypeDecl): string {
  * Explicit `@"id"` wins; otherwise `<parentId>.<name>`, rooted at the model
  * name. A stable ID on a parent therefore also stabilizes its children.
  */
+/** Words of the grammar, which a name can only be in quotes. */
+const KEYWORDS = new Set(['model', 'profile', 'kind', 'abstract', 'extends', 'prop', 'contains', 'ref', 'enum', 'visual', 'version',
+    'string', 'int', 'float', 'bool', 'expr', 'action', 'true', 'false', 'ordered', 'unique', 'readonly', 'derived',
+    'opposite', 'subsets', 'redefines', 'datatype', 'stereotype', 'when', 'invariant', 'message', 'query', 'derive', 'part', 'plays']);
+
+/** A name as the text writes it: bare if it's an identifier and not a keyword, else quoted (`"Order Line"`). */
+export function nameText(name: string): string {
+    return /^[_a-zA-Z]\w*$/.test(name) && !KEYWORDS.has(name) ? name : JSON.stringify(name);
+}
+
 export function elementId(el: Element): string {
     if (el.stableId) return el.stableId;
     const c = el.$container;

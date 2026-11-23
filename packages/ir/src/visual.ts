@@ -47,6 +47,7 @@ export const VISUAL_KEYS = {
     layout:     { type: 'string', values: ['rows', 'free'], description: 'how a container places what it contains: in rows (default), or where they\'re dragged, growing to hold them' },
     member:     { type: 'bool', description: 'drawn inside whatever contains it, as a row (like a UML attribute)' },
     diagram:    { type: 'bool', description: 'an element of this kind that contains something has a diagram of its own (like a UML state machine): drawn as one node, opened to show what it contains' },
+    hidden:     { type: 'bool', description: 'elements of this kind aren\'t drawn, nor what they contain (an operation\'s parameters: its label can show them)' },
     hideWhenAlone: { type: 'bool', description: 'an element of this kind that is the only one in its owner\'s containment isn\'t drawn: what it contains is drawn in its place (like a UML region)' },
     // A kind with both `source` and `target` is drawn as an edge between them, like a UML generalization.
     source:     { type: 'string', description: 'draw elements of this kind as edges: from this reference\'s target, or "owner" (the containing element)' },

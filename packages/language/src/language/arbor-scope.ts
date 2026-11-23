@@ -11,7 +11,7 @@
  *   back to a model name; each further segment names a nested child.
  */
 import {
-    AstUtils, DefaultScopeComputation, DefaultScopeProvider, EMPTY_STREAM, stream,
+    AstUtils, DefaultScopeComputation, ValueConverter, DefaultScopeProvider, EMPTY_STREAM, stream,
     type AstNode, type AstNodeDescription, type AstNodeLocator, type LangiumCoreServices, type LangiumDocument,
     type LangiumDocuments, type ReferenceInfo, type Scope, type Stream
 } from 'langium';
@@ -38,8 +38,14 @@ export class ArborScopeProvider extends DefaultScopeProvider {
 
     override getScope(context: ReferenceInfo): Scope {
         const scope = super.getScope(context);
-        if (this.reflection.getReferenceType(context) !== Element.$type) return scope;
-        return new ElementPathScope(scope, name => this.modelsNamed(name), this.descriptions);
+        if (this.reflection.getReferenceType(context) !== Element.$type) {
+            // Inside a profile, its own names win, in whichever of its parts they're defined.
+            const profile = AstUtils.getContainerOfType(context.container, isProfile);
+            return profile ? new OwnNamesFirst(scope, profile.name) : scope;
+        }
+        // The path as written, quotes and all: the reference's text has its names unquoted already,
+        // so `"a.b".c` and `a.b.c` would look the same.
+        return new ElementPathScope(scope, name => this.modelsNamed(name), this.descriptions, context.reference.$refNode?.text);
     }
 
     /**
@@ -48,9 +54,14 @@ export class ArborScopeProvider extends DefaultScopeProvider {
      * the referencing file. Empty when the reference is unambiguous.
      */
     ambiguousTargets(context: ReferenceInfo, target: AstNode | undefined): string[] {
-        const name = context.reference.$refText;
-        if (!target || name.includes('.')) return [];
+        const path = splitPath(context.reference.$refNode?.text ?? context.reference.$refText);
+        if (!target || path.length !== 1) return [];
+        const name = path[0];
         if (AstUtils.getDocument(target) === AstUtils.getDocument(context.container)) return [];
+        // A profile's own name, from another of its parts.
+        const here = AstUtils.getContainerOfType(context.container, isProfile);
+        const there = AstUtils.getContainerOfType(target, isProfile);
+        if (here && there && here.name === there.name) return [];
         const type = this.reflection.getReferenceType(context);
         const names = this.indexManager.allElements(type)
             .filter(d => d.name === name)
@@ -76,21 +87,40 @@ export class ArborScopeProvider extends DefaultScopeProvider {
     }
 }
 
+/** A bare name inside profile `profile` is first looked for as `profile.name`, so any of its parts' names win. */
+class OwnNamesFirst implements Scope {
+    constructor(private readonly inner: Scope, private readonly profile: string) {}
+    getElement(name: string): AstNodeDescription | undefined {
+        return (name.includes('.') ? undefined : this.inner.getElement(`${this.profile}.${name}`)) ?? this.inner.getElement(name);
+    }
+    getElements(name: string): Stream<AstNodeDescription> {
+        const own = name.includes('.') ? EMPTY_STREAM : this.inner.getElements(`${this.profile}.${name}`);
+        return own.isEmpty() ? this.inner.getElements(name) : own;
+    }
+    getAllElements(): Stream<AstNodeDescription> {
+        return this.inner.getAllElements();
+    }
+}
+
 class ElementPathScope implements Scope {
     constructor(
         private readonly inner: Scope,
         private readonly models: (name: string) => Model[],
-        private readonly descriptions: LangiumCoreServices['workspace']['AstNodeDescriptionProvider']
+        private readonly descriptions: LangiumCoreServices['workspace']['AstNodeDescriptionProvider'],
+        private readonly written?: string
     ) {}
 
     getElement(name: string): AstNodeDescription | undefined {
         return this.getElements(name).head();
     }
 
-    getElements(name: string): Stream<AstNodeDescription> {
+    getElements(text: string): Stream<AstNodeDescription> {
+        // The names in it, unquoted: `shop."Order Line"` is shop, then Order Line.
+        const segments = splitPath(this.written ?? text);
+        const name = segments.join('.');
         const direct = this.inner.getElements(name);
-        if (!name.includes('.') || !direct.isEmpty()) return direct;
-        const [head, ...rest] = name.split('.');
+        if (segments.length === 1 || !direct.isEmpty()) return direct;
+        const [head, ...rest] = segments;
         const fromElement = this.inner.getElement(head)?.node;
         const starts: Element[][] = isElement(fromElement)
             ? [[fromElement]]
@@ -114,6 +144,29 @@ function walk(el: Element, path: string[]): Element | undefined {
     let cur: Element | undefined = el;
     for (const seg of path) cur = cur?.children.find(c => c.name === seg);
     return cur;
+}
+
+/** The names in a reference's path, `a."b.c".d` being a, b.c and d: quoted ones unescaped, the rest trimmed. */
+export function splitPath(text: string): string[] {
+    const out: string[] = [];
+    let cur = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (quoted) {
+            if (c === '\\' && i + 1 < text.length) { cur += ValueConverter.convertString(`"\\${text[++i]}"`); continue; }
+            if (c === '"') { quoted = false; continue; }
+            cur += c;
+        } else if (c === '"') {
+            quoted = true;
+        } else if (c === '.') {
+            out.push(cur.trim());
+            cur = '';
+        } else if (!/\s/.test(c)) {
+            cur += c;
+        }
+    }
+    out.push(quoted ? cur : cur.trim());
+    return out;
 }
 
 /** `profile.Name` for kinds and enums, `model.Name` for top-level elements. */

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DiagramCanvas, useDiagram, useRenderSettings } from 'webgpu-flow';
 import { loadWorkspace } from '@arbor/language';
-import { placedNodes, toFlowGraph } from '@arbor/adapter-flow';
+import { highlight, placedNodes, toFlowGraph, type FlowGraph } from '@arbor/adapter-flow';
 import { sources, useStudio } from './store';
 
 const SYNC_DELAY_MS = 200;
@@ -16,6 +16,9 @@ export default function DiagramPane() {
   const files = useStudio(s => s.files);
   const resyncRequest = useStudio(s => s.resyncRequest);
   const root = useStudio(s => s.root);
+  const marks = useStudio(s => s.highlight);
+  /** The last graph drawn, unmarked: a simulation step redraws it with new marks, without reading the text again. */
+  const drawn = useRef<FlowGraph | null>(null);
   const resolution = useRenderSettings(s => s.resolution);
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -40,11 +43,17 @@ export default function DiagramPane() {
       if (placed.length) {
         setLayout(l => ({ ...l, ...Object.fromEntries(placed.map(n => [n.id, { ...n.data.position }])) }));
       }
-      loadDiagram(graph);
+      drawn.current = graph;
+      loadDiagram(highlight(graph, useStudio.getState().highlight));
       setDiagnostics(result.diagnostics);
     }, SYNC_DELAY_MS);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [files, resyncRequest, root, loadDiagram]);
+
+  // A simulation's active states and the transitions it just took.
+  useEffect(() => {
+    if (drawn.current) loadDiagram(highlight(drawn.current, marks));
+  }, [marks, loadDiagram]);
 
   // Fit the first diagram once it is committed (the provider syncs its state after this effect).
   useEffect(() => {

@@ -1,0 +1,13 @@
+{
+  "name": "@arbor/statemachine",
+  "version": "0.1.0",
+  "description": "Runs a model's state machines: UML run-to-completion semantics over the IR, with the expression language for guards and effects. For simulation.",
+  "type": "module",
+  "main": "out/index.js",
+  "types": "out/index.d.ts",
+  "exports": { ".": "./out/index.js" },
+  "dependencies": {
+    "@arbor/expr": "0.1.0",
+    "@arbor/ir": "0.1.0"
+  }
+}

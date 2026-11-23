@@ -120,7 +120,7 @@ describe('profile validation', () => {
 
     it('the UML sample is clean', async () => {
         const dir = fileURLToPath(new URL('../../../samples/uml/', import.meta.url));
-        const r = await loadWorkspace(['uml.arbor', 'orm.arbor', 'library.arbor', 'loan.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
+        const r = await loadWorkspace(['uml.arbor', 'orm.arbor', 'primitives.arbor', 'library.arbor', 'loan.arbor'].map(f => ({ uri: f, text: readFileSync(dir + f, 'utf8') })));
         expect(r.diagnostics).toEqual([]);
         // In the model's diagram the state machine is one node, owned by Loan, that opens its own diagram.
         const sm = 'lending.Loan.Lifecycle', main = `${sm}.main`, terms = `${main}.Active.terms`;
@@ -148,15 +148,15 @@ describe('profile validation', () => {
         expect(node(`${main}.Overdue`).visual.presentation).toBeUndefined();
         expect(node(`${main}.Overdue`).data.size).toEqual({ width: 230.5, height: 86 });   // header, then its compartment, as the renderer sizes it
         const labels = (region: string, root = sm) => toFlowGraph(r.ir, { root }).edges.filter(e => e.id.startsWith(`${region}.Transition#`)).map(e => e.data.label);
-        expect(labels(main)).toEqual(['', 'returned', 'after(14 days)', 'returned', '[fine == 0]', '[fine > 0] / chargeFine()',
-            'after(90 days)', 'paid [amount >= replacementCost]']);
+        expect(labels(main)).toEqual(['', 'returned', 'after(14 days)', 'returned', '[not owes()]', '[owes()] / notifyMember()',
+            'after(90 days)', 'paid / fine := 0']);
         // Pseudostates are drawn by their kind: the initial one by default, a choice as a diamond.
         expect(node(`${main}.start`).visual).toMatchObject({ shape: 'initialNode', size: { width: 24, height: 24 } });
         expect(node(`${main}.assess`).visual).toMatchObject({ shape: 'diamond', size: { width: 32, height: 32 } });
 
         // The composite state's diagram: its states, titled with its name.
         expect(toFlowGraph(r.ir, { root: active }).nodes.map(n => n.id.slice(terms.length + 1))).toEqual(['begin', 'Lent', 'Renewed']);
-        expect(labels(terms, active)).toEqual(['', 'renew [renewals < 3]']);
+        expect(labels(terms, active)).toEqual(['', 'renew [renewals < 3] / renew()']);
         expect(diagramTitle(r.ir, active)).toBe('Active');
     });
 

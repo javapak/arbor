@@ -1,0 +1,7 @@
+// UML's primitive types, the ones the expression language computes with.
+model primitives {
+    PrimitiveType Boolean {}
+    PrimitiveType Integer {}
+    PrimitiveType Real {}
+    PrimitiveType String {}
+}
