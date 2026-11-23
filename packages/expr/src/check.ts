@@ -244,8 +244,16 @@ class Checker {
         switch (e.name) {
             case 'size': return sig([], INTEGER);
             case 'isEmpty': case 'notEmpty': return sig([], BOOLEAN);
-            case 'includes': case 'excludes': return sig([el], BOOLEAN);
-            case 'count': return sig([el], INTEGER);
+            // As in OCL, any object may be asked about; one that can never be an item is a mistake.
+            case 'includes': case 'excludes': case 'count': {
+                const [arg] = e.args;
+                if (e.args.length !== 1) return sig([el], e.name === 'count' ? INTEGER : BOOLEAN);
+                const t = this.expr(arg, scope);
+                if (!conforms(t, el, this.space) && !conforms(el, t, this.space)) {
+                    this.error(DiagnosticCode.TypeMismatch, `This collection holds ${typeName(el)}, so it never holds ${typeName(t)}.`, arg);
+                }
+                return e.name === 'count' ? INTEGER : BOOLEAN;
+            }
             case 'includesAll': case 'excludesAll': return sig([ANY], BOOLEAN);
             case 'sum':
                 if (!isNumeric(el)) this.error(DiagnosticCode.TypeMismatch, `'sum' adds numbers, but these are ${typeName(el)}.`, e);

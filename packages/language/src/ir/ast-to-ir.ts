@@ -101,6 +101,7 @@ function kindToIR(k: Kind): IRKind {
                 params: o.params.map(p => ({ name: p.name, type: typeRefToIR(p.type), multiplicity: oneOrMore(p.multiplicity) })),
                 returns: typeRefToIR(o.returns),
                 multiplicity: oneOrMore(o.multiplicity),
+                ...(o.ordered ? { ordered: true as const } : {}),
                 body: o.body,
             })),
         } : {})

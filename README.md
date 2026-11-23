@@ -28,6 +28,8 @@ knows about both Langium and the IR.
 | M2 | **profiles**, as plain data, loaded at runtime | `examples/software.arbor`, `examples/persistence.arbor` |
 | M1 | **models** in one generic instance syntax | `examples/shop.arbor` |
 
+[profiles/uml](profiles/uml) is UML 2.5.1's metamodel as a profile, in parts, with its derived properties and OCL rules; work in progress (see its README).
+
 Profiles are interpreted, never compiled: users can define new kinds at
 runtime with no TypeScript compiler API and no `eval`.
 

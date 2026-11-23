@@ -131,6 +131,7 @@
               },
               "returns": { "$ref": "#/$defs/typeRef" },
               "multiplicity": { "$ref": "#/$defs/multiplicity" },
+              "ordered": { "const": true },
               "body": { "type": "string" }
             }
           }

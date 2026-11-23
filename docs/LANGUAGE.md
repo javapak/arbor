@@ -115,7 +115,7 @@ abstract kind Classifier extends NamedElement {
 
 - `invariant name: "…"` (with an optional `message "…"`): every element of the kind, and of its sub-kinds, keeps it; `arbor check` reports one that doesn't on the element, with the message (ARB115), and a rule it couldn't work out as a warning.
 - `derive "…"` on a `derived` feature (not one with an `opposite`): how it's worked out. Its values are computed into the IR, so diagrams, forms and the simulator see them; one that fails is a warning on the element (ARB116), and leaves the feature empty. Derived features can build on each other; one depending on itself is a failure.
-- `query name(param: Type, …): Type [m] = "…"`: an operation the kind's elements answer, for rules and derived features to call (`self.allParents()`); its parameters are variables in its body. A result or parameter with several values is a Set. A query calling itself without end is a failure.
+- `query name(param: Type, …): Type [m] = "…"`: an operation the kind's elements answer, for rules and derived features to call (`self.allParents()`); its parameters are variables in its body. A result or parameter with several values is a Set, or an OrderedSet for an `ordered query`. A query calling itself without end is a failure.
 - `oclContainer()` is the element holding this one (null at the top level); `name` is every element's name.
 - The expressions are type-checked against the kind when the profile is checked, with problems inside the string (EXP001–EXP008), and must give what the rule needs: a Boolean, the feature's type, the query's result. These words are keywords too: `invariant`, `message`, `derive`, `query`.
 

@@ -62,8 +62,8 @@ export function irTypeSpace(doc: IRDocument): TypeSpace & { classOf(kindId: stri
     const typeOfRef = (t: IRTypeRef): Type =>
         t === 'string' || t === 'expr' || t === 'action' ? STRING : t === 'int' ? INTEGER : t === 'float' ? REAL : t === 'bool' ? BOOLEAN
             : typeOfId('enum' in t ? t.enum : 'datatype' in t ? t.datatype : t.kind) ?? ANY;
-    // UML's defaults: a query's result and parameters are unordered and unique.
-    const typed = (t: IRTypeRef, m: IRMultiplicity): Type => (many(m) ? collectionOf('Set', typeOfRef(t)) : typeOfRef(t));
+    // UML's defaults: a query's result and parameters are unordered (unless it says `ordered`) and unique.
+    const typed = (t: IRTypeRef, m: IRMultiplicity, ordered = false): Type => (many(m) ? collectionOf(ordered ? 'OrderedSet' : 'Set', typeOfRef(t)) : typeOfRef(t));
     const property = (owner: string, name: string): PropertyInfo | undefined => {
         // Every element has a name (not a feature: the text writes it before the braces).
         if (name === 'name' && index.kinds.has(owner) && !featuresOf(owner).some(g => g.name === name)) return { type: STRING, readonly: true };
@@ -91,7 +91,7 @@ export function irTypeSpace(doc: IRDocument): TypeSpace & { classOf(kindId: stri
         operation: (owner, name): OperationInfo | undefined => {
             if (!index.kinds.has(owner)) return undefined;
             const q = queriesOf(index, owner).find(o => o.name === name);
-            if (q) return { params: q.params.map(p => ({ name: p.name, type: typed(p.type, p.multiplicity) })), returns: typed(q.returns, q.multiplicity), query: true };
+            if (q) return { params: q.params.map(p => ({ name: p.name, type: typed(p.type, p.multiplicity) })), returns: typed(q.returns, q.multiplicity, !!q.ordered), query: true };
             // OCL's: the element holding this one, of whatever kind.
             if (name === 'oclContainer') return { params: [], returns: ANY, query: true };
             return undefined;
@@ -163,6 +163,15 @@ export function irValueSpace(doc: IRDocument): ValueSpace & { element(id: string
         });
     };
 
+    const union = (el: IRElement, name: string): IRElement[] => {
+        const out = new Set<IRElement>((el.references[name] ?? []).flatMap(id => index.elements.get(id) ?? []));
+        for (const sub of index.elementFeatures(el)) {
+            if (!sub.subsets?.includes(name)) continue;
+            const v = read(el, sub.name);
+            for (const x of v instanceof CollectionValue ? v.items : v === null ? [] : [v]) if (isElement(x as ObjectValue)) out.add(x as IRElement);
+        }
+        return [...out];
+    };
     const read = (el: IRElement, name: string): Value => {
         const f = index.elementFeature(el, name);
         if (!f) return name === 'name' ? el.name || null : null;
@@ -174,7 +183,8 @@ export function irValueSpace(doc: IRDocument): ValueSpace & { element(id: string
             return many ? new CollectionValue(kind, items) : items[0] ?? null;
         }
         if (f.feature === 'ref') {
-            const items = index.values(el, name).flatMap(id => index.elements.get(id) ?? []);
+            // A derived union: what the features subsetting it hold, read here, so derived ones (`derive "…"`) count too.
+            const items = f.derived && !f.opposite ? union(el, name) : index.values(el, name).flatMap(id => index.elements.get(id) ?? []);
             return many ? new CollectionValue(kind, items) : items[0] ?? null;
         }
         const raw = index.get(el, name) as unknown;
@@ -224,18 +234,22 @@ export interface DeriveFailure { element: string; feature: string; message: stri
 
 /**
  * Works out the derived features with `derive "…"` of every element, and
- * writes their values into the IR (references as element IDs). Gives what
- * failed: such a feature is then left without a value.
+ * writes their values into the IR (references as element IDs), with the
+ * derived unions they're part of. Gives what failed: such a feature is then
+ * left without a value.
  */
 export function deriveExpressions(doc: IRDocument): DeriveFailure[] {
     const index = new IRIndex(doc);
-    if (!doc.profiles.some(p => p.kinds.some(k => k.features.some(f => f.derive)))) return [];
+    if (!doc.profiles.some(p => p.kinds.some(k => k.features.some(f => f.derive)))) return [];   // unions are as derive.ts left them
     const space = irValueSpace(doc);
     const failures: DeriveFailure[] = [];
     const results: Array<{ el: IRElement; f: IRFeature; value: Value }> = [];
     for (const el of index.elements.values()) {
-        for (const f of index.elementFeatures(el)) {
-            if (!f.derive) continue;
+        const features = index.elementFeatures(el);
+        for (const f of features) {
+            // Expressions, and the derived unions that may gather their values (a namespace's members, its imported ones too).
+            const union = f.feature === 'ref' && f.derived && !f.opposite && !f.derive && features.some(g => g.subsets?.includes(f.name));
+            if (!f.derive && !union) continue;
             try {
                 results.push({ el, f, value: space.get(el, f.name) });
             } catch (e) {

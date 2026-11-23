@@ -42,7 +42,7 @@ Invariant:
 // A query the kind's elements answer, for invariants and derived features to use:
 // query allParents(): Classifier [0..*] = "generalizations.general->…"
 QueryOperation:
-    'query' name=FeatureName '(' (params+=QueryParameter (',' params+=QueryParameter)*)? ')'
+    (ordered?='ordered')? 'query' name=FeatureName '(' (params+=QueryParameter (',' params+=QueryParameter)*)? ')'
         ':' returns=AnyTypeRef multiplicity=Multiplicity? '=' body=STRING;
 QueryParameter:
     name=FeatureName ':' type=AnyTypeRef multiplicity=Multiplicity?;

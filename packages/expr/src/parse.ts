@@ -194,7 +194,9 @@ class Parser {
         }
         if (this.is('::')) {
             this.next();
-            const literal = this.ident('a literal name').value;
+            // Any word: a literal may be named like a keyword (ParameterDirectionKind::in, ::return).
+            if (this.peek.kind !== 'ident') this.fail(`Expected a literal name${this.found()}.`);
+            const literal = this.next().value;
             return { type: 'enumLiteral', enum: t.value, literal, ...this.span(start) };
         }
         if (this.is('(')) {

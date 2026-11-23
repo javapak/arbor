@@ -60,6 +60,8 @@ export interface IRQuery {
     params: Array<{ name: string; type: IRTypeRef; multiplicity: IRMultiplicity }>;
     returns: IRTypeRef;
     multiplicity: IRMultiplicity;
+    /** A result with several values is an OrderedSet, not a Set. */
+    ordered?: true;
     /** An expression giving the result, about the element, with the parameters as variables. */
     body: string;
 }

@@ -46,8 +46,10 @@ export function deriveReferences(doc: IRDocument): IRDocument {
             const other = index.features(f.target).find(o => o.name === f.opposite);
             let values: string[] = [];
             if (other?.feature === 'contains') {
+                // The owner, if it holds the element there and is of the kind the reference names
+                // (a parameter's `operation` is its owner only when that's an operation).
                 const parent = el.parent ? index.elements.get(el.parent) : undefined;
-                if (parent && within(parent.kind, el.containedIn, other.name)) values = [parent.id];
+                if (parent && within(parent.kind, el.containedIn, other.name) && index.isA(parent.kind, f.target)) values = [parent.id];
             } else if (other?.feature === 'ref') {
                 values = (pointing.get(el.id)?.get(other.name) ?? [])
                     .filter(id => index.isA(index.elements.get(id)!.kind, f.target));
