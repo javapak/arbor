@@ -1,0 +1,183 @@
+// UML 2.5.1, clause 9: Classification. Classifiers and their generalizations,
+// features (properties, operations, parameters), redefinition, and instances
+// with their slots.
+//
+// Not yet, until their clauses are here: Property's association, class and
+// qualifiers (11, StructuredClassifiers), Classifier's use cases and
+// collaborations, BehavioralFeature's methods (13), and the redefinition and
+// subsetting rules that need a type's own type (oclType(), which the expression
+// language doesn't have).
+profile uml part "Classification" version "2.5.1" {
+
+    enum AggregationKind { none, shared, composite }
+    enum CallConcurrencyKind { sequential, guarded, concurrent }
+    enum ParameterDirectionKind { in, inout, out, return }
+    enum ParameterEffectKind { create, read, update, delete }
+
+    // ------------------------------------------------------------ 9.2 classifiers
+
+    abstract kind RedefinableElement extends NamedElement {
+        prop isLeaf: bool = false
+        derived ref redefinedElement:    RedefinableElement [0..*]
+        derived ref redefinitionContext: Classifier [0..*]
+
+        invariant non_leaf_redefinition: "redefinedElement->forAll(e | not e.isLeaf)"
+            message "A leaf can't be redefined."
+    }
+
+    abstract kind Classifier extends Namespace, Type, TemplateableElement, RedefinableElement {
+        prop isAbstract:             bool = false
+        prop isFinalSpecialization:  bool = false
+        contains generalization:     Generalization [0..*] subsets ownedElement
+        contains substitution:       Substitution [0..*] subsets ownedElement
+        ref      redefinedClassifier: Classifier [0..*] subsets redefinedElement
+        ref      powertypeExtent:    GeneralizationSet [0..*] { hidden: true }
+        derived ref feature:         Feature [0..*] subsets member
+        derived ref attribute:       Property [0..*] subsets feature
+        derived ref general:         Classifier [0..*] derive "parents()"
+        derived ref inheritedMember: NamedElement [0..*] subsets member
+            derive "allParents()->collect(c | c.member)->select(m | m.visibility <> VisibilityKind::private)->asSet()"
+
+        query parents(): Classifier [0..*] = "generalization.general->asSet()"
+        query allParents(): Classifier [0..*] = "parents()->closure(c | c.parents())"
+        query allFeatures(): Feature [0..*] = "member->select(oclIsKindOf(Feature))->collect(oclAsType(Feature))->asSet()"
+        query allAttributes(): Property [0..*] = "allFeatures()->select(oclIsKindOf(Property))->collect(oclAsType(Property))->asSet()"
+        query allSlottableFeatures(): StructuralFeature [0..*] = "allFeatures()->select(oclIsKindOf(StructuralFeature))->collect(oclAsType(StructuralFeature))->asSet()"
+        query conformsTo(other: Classifier): bool = "other = self or allParents()->includes(other)"
+
+        invariant no_cycles_in_generalization: "not allParents()->includes(self)"
+            message "A classifier can't specialize itself, directly or through others."
+        invariant non_final_parents: "parents()->forAll(p | not p.isFinalSpecialization)"
+            message "A classifier can't specialize one that is final."
+    }
+
+    kind Generalization extends DirectedRelationship {
+        prop isSubstitutable: bool [0..1] = true
+        ref  general: Classifier [1] subsets target
+        derived ref specific: Classifier [0..1] opposite generalization subsets source, owner
+        ref  generalizationSet: GeneralizationSet [0..*] { hidden: true }
+        visual { source: "owner"  target: "general"  targetMarker: "triangle"  label: "" }
+    }
+
+    kind GeneralizationSet extends PackageableElement {
+        prop isCovering: bool = false
+        prop isDisjoint: bool = false
+        ref  powertype: Classifier [0..1]
+        ref  generalization: Generalization [0..*]
+
+        invariant generalization_same_classifier: "generalization->collect(g | g.general)->asSet()->size() <= 1"
+            message "The generalizations of a set have the same general classifier."
+    }
+
+    // Its client and supplier are the substituting classifier (its owner) and the contract.
+    kind Substitution extends Realization {
+        ref contract: Classifier [1] redefines supplier subsets target
+        derived ref substitutingClassifier: Classifier [0..1] opposite substitution redefines client subsets source, owner
+        visual { source: "owner"  target: "contract"  label: "«substitute»" }
+    }
+
+    // ------------------------------------------------------------ 9.4 features
+
+    abstract kind Feature extends RedefinableElement {
+        prop isStatic: bool = false
+        derived ref featuringClassifier: Classifier [0..*]
+            derive "if oclContainer().oclIsKindOf(Classifier) then Set{oclContainer().oclAsType(Classifier)} else Set{} endif"
+    }
+
+    abstract kind StructuralFeature extends MultiplicityElement, TypedElement, Feature {
+        prop isReadOnly: bool = false
+    }
+
+    abstract kind BehavioralFeature extends Namespace, Feature {
+        prop concurrency: CallConcurrencyKind = sequential
+        prop isAbstract:  bool = false
+        ordered contains ownedParameter: Parameter [0..*] subsets ownedMember
+        ref      raisedException: Type [0..*]
+
+        ordered query inputParameters(): Parameter [0..*] = "ownedParameter->select(p | p.direction = ParameterDirectionKind::in or p.direction = ParameterDirectionKind::inout)"
+        ordered query outputParameters(): Parameter [0..*] = "ownedParameter->select(p | p.direction <> ParameterDirectionKind::in)"
+    }
+
+    // Shown in its operation's label, not drawn.
+    kind Parameter extends MultiplicityElement, TypedElement {
+        prop direction:   ParameterDirectionKind = in
+        prop effect:      ParameterEffectKind [0..1]
+        prop isException: bool = false
+        prop isStream:    bool = false
+        contains defaultValue: ValueSpecification [0..1] subsets ownedElement
+        derived ref operation: Operation [0..1] opposite ownedParameter
+        derived prop default: string [0..1] derive "if defaultValue.oclIsUndefined() then null else defaultValue.stringValue() endif"
+
+        invariant in_and_out: "(effect = ParameterEffectKind::delete implies (direction = ParameterDirectionKind::in or direction = ParameterDirectionKind::inout)) and (effect = ParameterEffectKind::create implies direction <> ParameterDirectionKind::in)"
+            message "Only an in or inout parameter can delete, and an in parameter can't create."
+        invariant not_exception: "isException implies direction <> ParameterDirectionKind::in and direction <> ParameterDirectionKind::inout"
+            message "An exception parameter is out or return."
+        invariant stream_and_exception: "not (isException and isStream)"
+            message "A parameter is a stream or an exception, not both."
+        visual { hidden: true }
+    }
+
+    // ------------------------------------------------------------ 9.5 properties
+
+    kind Property extends StructuralFeature {
+        prop aggregation:     AggregationKind = none
+        prop isDerived:       bool = false
+        prop isDerivedUnion:  bool = false
+        prop isID:            bool = false
+        contains defaultValue: ValueSpecification [0..1] subsets ownedElement
+        ref  redefinedProperty: Property [0..*] subsets redefinedElement
+        ref  subsettedProperty: Property [0..*]
+        derived ref datatype:  DataType [0..1] opposite ownedAttribute
+        derived ref interface: Interface [0..1] opposite ownedAttribute
+        derived prop isComposite: bool [0..1] derive "aggregation = AggregationKind::composite"
+
+        invariant derived_union_is_derived: "isDerivedUnion implies isDerived"
+            message "A derived union is derived."
+        invariant derived_union_is_read_only: "isDerivedUnion implies isReadOnly"
+            message "A derived union is read-only."
+        visual { member: true  label: "{name}{? : {type}}" }
+    }
+
+    // ------------------------------------------------------------ 9.6 operations
+
+    kind Operation extends BehavioralFeature, ParameterableElement, TemplateableElement {
+        prop isQuery: bool = false
+        contains bodyCondition: Constraint [0..1] subsets ownedRule
+        contains precondition:  Constraint [0..*] subsets ownedRule
+        contains postcondition: Constraint [0..*] subsets ownedRule
+        ref  redefinedOperation: Operation [0..*] subsets redefinedElement
+        derived ref datatype:  DataType [0..1] opposite ownedOperation
+        derived ref interface: Interface [0..1] opposite ownedOperation
+        // The return parameter's type.
+        derived ref type: Type [0..1] derive "returnResult()->collect(p | p.type)->any(t | true)"
+
+        ordered query returnResult(): Parameter [0..*] = "ownedParameter->select(p | p.direction = ParameterDirectionKind::return)"
+
+        invariant at_most_one_return: "returnResult()->size() <= 1"
+            message "An operation has at most one return parameter."
+        invariant only_body_for_query: "not bodyCondition.oclIsUndefined() implies isQuery"
+            message "Only a query has a body condition."
+        visual { member: true  label: "{name}({ownedParameter}){? : {type}}" }
+    }
+
+    // ------------------------------------------------------------ 9.8 instances
+
+    kind InstanceSpecification extends PackageableElement {
+        ref      classifier:    Classifier [0..*]
+        contains slot:          Slot [0..*] subsets ownedElement
+        contains specification: ValueSpecification [0..1] subsets ownedElement
+
+        invariant defining_feature: "slot->forAll(s | classifier->exists(c | c.allSlottableFeatures()->includes(s.definingFeature)))"
+            message "Each slot is for a feature of one of the instance's classifiers."
+        invariant structural_feature: "classifier->forAll(c | c.allSlottableFeatures()->forAll(f | slot->select(s | s.definingFeature = f)->size() <= 1))"
+            message "A feature has one slot at most."
+        visual { shape: "rectangle"  color: "#cbd5e1"  labelColor: "#0f172a"  label: "{name}{? : {classifier}}" }
+    }
+
+    kind Slot extends Element {
+        ref definingFeature: StructuralFeature [1]
+        ordered contains value: ValueSpecification [0..*] subsets ownedElement
+        derived ref owningInstance: InstanceSpecification [0..1] opposite slot subsets owner
+        visual { member: true  label: "{definingFeature}" }
+    }
+}

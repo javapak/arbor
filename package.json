@@ -23,7 +23,7 @@
     "flow": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js flow",
     "check": "node --disallow-code-generation-from-strings packages/language/out/cli/main.js check",
     "studio": "npm run build && npm run dev -w @arbor/studio",
-    "extension": "npm run generate && tsc -b packages/ir packages/adapter-flow packages/language packages/property-form && npm run build -w arbor-vscode"
+    "extension": "npm run generate && tsc -b packages/ir packages/expr packages/statemachine packages/adapter-flow packages/language packages/property-form packages/simulator-ui && npm run build -w arbor-vscode"
   },
   "devDependencies": {
     "@cfworker/json-schema": "^4.1.6",

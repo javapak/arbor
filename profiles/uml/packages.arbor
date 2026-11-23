@@ -1,0 +1,50 @@
+// UML 2.5.1, clause 12: Packages. Packages and what they own, package merges,
+// models, profiles and their application.
+//
+// Not yet: Stereotype, Extension, ExtensionEnd and Image (12.3; a stereotype is
+// a Class, clause 11), and Package's stereotypes.
+profile uml part "Packages" version "2.5.1" {
+
+    kind Package extends Namespace, PackageableElement, TemplateableElement {
+        prop URI: string [0..1]
+        contains packagedElement:   PackageableElement [0..*] subsets ownedMember
+        contains packageMerge:      PackageMerge [0..*] subsets ownedElement
+        contains profileApplication: ProfileApplication [0..*] subsets ownedElement
+        derived ref nestingPackage: Package [0..1] opposite packagedElement subsets namespace
+        derived ref nestedPackage:  Package [0..*] derive "packagedElement->select(oclIsKindOf(Package))->collect(oclAsType(Package))->asSet()"
+        derived ref ownedType:      Type [0..*] derive "packagedElement->select(oclIsKindOf(Type))->collect(oclAsType(Type))->asSet()"
+
+        // What another namespace importing this one sees: what isn't private.
+        query visibleMembers(): PackageableElement [0..*] = "packagedElement->select(e | e.visibility <> VisibilityKind::private)->asSet()"
+        query makesVisible(el: NamedElement): bool = "packagedElement->includes(el) and el.visibility <> VisibilityKind::private"
+        query mustBeOwned(): bool = "false"
+
+        invariant elements_public_or_private: "packagedElement->forAll(e | e.visibility.oclIsUndefined() or e.visibility = VisibilityKind::public or e.visibility = VisibilityKind::private)"
+            message "A package's elements are public or private."
+        visual { shape: "package"  color: "#facc15"  diagram: true }
+    }
+
+    kind PackageMerge extends DirectedRelationship {
+        ref mergedPackage: Package [1] subsets target
+        derived ref receivingPackage: Package [0..1] opposite packageMerge subsets source, owner
+        visual { source: "owner"  target: "mergedPackage"  line: "dashed"  targetMarker: "arrow"  label: "«merge»" }
+    }
+
+    kind Model extends Package {
+        prop viewpoint: string [0..1]
+        visual { label: "«model» {name}" diagram: true }
+    }
+
+    kind Profile extends Package {
+        contains metaclassReference: ElementImport [0..*] subsets elementImport
+        contains metamodelReference: PackageImport [0..*] subsets packageImport
+        visual { label: "«profile» {name}" diagram: true }
+    }
+
+    kind ProfileApplication extends DirectedRelationship {
+        prop isStrict: bool = false
+        ref  appliedProfile: Profile [1] subsets target
+        derived ref applyingPackage: Package [0..1] opposite profileApplication subsets source, owner
+        visual { source: "owner"  target: "appliedProfile"  line: "dashed"  targetMarker: "arrow"  label: "«apply»" }
+    }
+}

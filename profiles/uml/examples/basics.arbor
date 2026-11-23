@@ -1,0 +1,62 @@
+// A model in the full UML profile (../), using what's there so far: packages
+// and imports, data types, enumerations, interfaces with operations,
+// generalizations, dependencies, constraints, instances, comments.
+// (Classes and associations come with StructuredClassifiers.)
+model basics {
+
+    Model Shop {
+        PrimitiveType Integer {}
+        PrimitiveType String {}
+
+        Package Money {
+            DataType Amount {
+                Property cents { type: -> Integer }
+                Property currency { type: -> String }
+            }
+            Enumeration Currency {
+                EnumerationLiteral EUR {}
+                EnumerationLiteral NOK {}
+            }
+        }
+
+        Package Catalog {
+            packageImport += PackageImport { importedPackage: -> Money }
+
+            DataType Price {
+                Generalization { general: -> Money.Amount }
+                Property discounts {
+                    type: -> Integer
+                    lowerValue += LiteralInteger { value: 0 }
+                    upperValue += LiteralUnlimitedNatural { value: "*" }
+                }
+            }
+
+            Interface Priced {
+                Property list { type: -> Price }
+                Operation priceFor {
+                    Parameter quantity { type: -> Integer }
+                    Parameter result { type: -> Price  direction: return }
+                }
+            }
+
+            Interface Discounted {
+                Generalization { general: -> Priced }
+                Operation discount { Parameter result { type: -> Integer  direction: return } }
+            }
+
+            ownedRule += Constraint positivePrice {
+                constrainedElement: [-> Price]
+                specification += OpaqueExpression { body: ["cents >= 0"]  language: ["OCL"] }
+            }
+
+            Usage pricing { client: [-> Discounted]  supplier: [-> Money] }
+
+            InstanceSpecification tenEuros {
+                classifier: [-> Money.Amount]
+                Slot { definingFeature: -> Money.Amount.cents  value += LiteralInteger { value: 1000 } }
+            }
+
+            Comment { body: "Prices are in the smallest unit of their currency."  annotatedElement: [-> Price] }
+        }
+    }
+}

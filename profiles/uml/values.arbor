@@ -1,0 +1,84 @@
+// UML 2.5.1, clause 8: Values. Value specifications: literals, expressions,
+// opaque expressions and instance values, with the queries that read them
+// (booleanValue(), integerValue()…), which each kind of value answers for itself.
+//
+// They aren't drawn: they're shown in their owner's label or properties.
+// LiteralUnlimitedNatural's value is written "*" or digits; unlimitedValue()
+// gives -1 for *.
+//
+// Not yet: time and durations (8.4: TimeExpression, Duration, Interval…).
+profile uml part "Values" version "2.5.1" {
+
+    abstract kind ValueSpecification extends TypedElement, PackageableElement {
+        query booleanValue():   bool [0..1]   = "null"
+        query integerValue():   int [0..1]    = "null"
+        query realValue():      float [0..1]  = "null"
+        query stringValue():    string [0..1] = "null"
+        query unlimitedValue(): int [0..1]    = "null"
+        query isNull():         bool          = "false"
+        query isComputable():   bool          = "false"
+        visual { hidden: true }
+    }
+
+    abstract kind LiteralSpecification extends ValueSpecification {
+        query isComputable(): bool = "true"
+    }
+
+    kind LiteralBoolean extends LiteralSpecification {
+        prop value: bool = false
+        query booleanValue(): bool [0..1] = "value"
+        query stringValue(): string [0..1] = "if value then 'true' else 'false' endif"
+    }
+
+    kind LiteralInteger extends LiteralSpecification {
+        prop value: int = 0
+        query integerValue(): int [0..1] = "value"
+        query realValue(): float [0..1] = "value"
+        query unlimitedValue(): int [0..1] = "if value >= 0 then value else null endif"
+    }
+
+    kind LiteralReal extends LiteralSpecification {
+        prop value: float = 0
+        query realValue(): float [0..1] = "value"
+    }
+
+    kind LiteralString extends LiteralSpecification {
+        prop value: string [0..1]
+        query stringValue(): string [0..1] = "value"
+    }
+
+    kind LiteralUnlimitedNatural extends LiteralSpecification {
+        prop value: string = "0"
+        query unlimitedValue(): int [0..1] = "if value = '*' then -1 else value.toInteger() endif"
+        query integerValue(): int [0..1] = "if value = '*' then null else value.toInteger() endif"
+        invariant natural: "value = '*' or value.toInteger() >= 0"
+            message "An unlimited natural is * or a natural number."
+    }
+
+    kind LiteralNull extends LiteralSpecification {
+        query isNull(): bool = "true"
+    }
+
+    kind Expression extends ValueSpecification {
+        prop symbol: string [0..1]
+        ordered contains operand: ValueSpecification [0..*] subsets ownedElement
+    }
+
+    kind StringExpression extends Expression, TemplateableElement {
+        ordered contains subExpression: StringExpression [0..*] subsets ownedElement
+        derived ref owningExpression: StringExpression [0..1] opposite subExpression subsets owner
+    }
+
+    // A value in some language: `body` and `language` pair up, in order.
+    kind OpaqueExpression extends ValueSpecification {
+        ordered prop body:     string [0..*]
+        ordered prop language: string [0..*]
+
+        invariant language_body_size: "language->notEmpty() implies body->size() = language->size()"
+            message "With languages given, each body has one."
+    }
+
+    kind InstanceValue extends ValueSpecification {
+        ref instance: InstanceSpecification [1]
+    }
+}

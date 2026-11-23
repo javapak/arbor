@@ -1,0 +1,177 @@
+// UML 2.5.1, clause 7: Common Structure. The base of everything: elements and
+// ownership, names and namespaces, relationships, dependencies, imports,
+// constraints and multiplicities.
+//
+// Ownership is UML's: every containment subsets Element::ownedElement (a
+// derived union), and every element knows its owner (a derived opposite).
+// An element's name is arbor's name (written before the braces), so there's no
+// `name` property.
+//
+// Not yet: templates (7.3). TemplateableElement and ParameterableElement are
+// here, empty, so the generalizations are UML's.
+profile uml part "CommonStructure" version "2.5.1" {
+
+    enum VisibilityKind { public, private, protected, package }
+
+    // ------------------------------------------------------------ 7.2 root
+
+    abstract kind Element {
+        derived contains ownedElement: Element [0..*]
+        derived ref      owner:        Element [0..1] opposite ownedElement
+        contains         ownedComment: Comment [0..*] subsets ownedElement
+
+        // All an element owns, directly or through what it owns.
+        query allOwnedElements(): Element [0..*] = "ownedElement->closure(e | e.ownedElement)"
+        query mustBeOwned(): bool = "true"
+
+        invariant not_own_self: "not allOwnedElements()->includes(self)"
+            message "An element may not directly or indirectly own itself."
+    }
+
+    kind Comment extends Element {
+        prop body: string [0..1]
+        ref  annotatedElement: Element [0..*] { line: "dotted"  targetMarker: "none"  label: "" }
+        visual { shape: "rectangle"  color: "#fef3c7"  labelColor: "#422006"  label: "{body}" }
+    }
+
+    // ------------------------------------------------------------ 7.3 templates (not yet)
+
+    abstract kind TemplateableElement extends Element {}
+    abstract kind ParameterableElement extends Element {}
+
+    // ------------------------------------------------------------ 7.4 namespaces
+
+    abstract kind NamedElement extends Element {
+        prop visibility: VisibilityKind [0..1]
+        derived ref namespace: Namespace [0..1] opposite ownedMember subsets owner
+        derived ref clientDependency: Dependency [0..*] opposite client
+        derived prop qualifiedName: string [0..1]
+            derive "if name.oclIsUndefined() then null else if namespace.oclIsUndefined() then name else if namespace.qualifiedName.oclIsUndefined() then null else namespace.qualifiedName + separator() + name endif endif endif"
+
+        query separator(): string = "'::'"
+        // The namespaces around it, innermost first.
+        query allNamespaces(): Namespace [0..*] = "if namespace.oclIsUndefined() then Set{} else namespace->closure(n | n.namespace) endif"
+
+        invariant visibility_needs_ownership: "(namespace.oclIsUndefined() and not owner.oclIsUndefined()) implies visibility.oclIsUndefined()"
+            message "An element owned by something other than a namespace has no visibility."
+    }
+
+    // Distinguishable members (members_distinguishable) are kept more strictly by arbor
+    // itself: siblings can't share a name (ARB110), whatever their kinds.
+    abstract kind Namespace extends NamedElement {
+        derived contains ownedMember:   NamedElement [0..*] subsets ownedElement, member
+        derived ref      member:        NamedElement [0..*]
+        contains         ownedRule:     Constraint [0..*] subsets ownedMember
+        contains         elementImport: ElementImport [0..*] subsets ownedElement
+        contains         packageImport: PackageImport [0..*] subsets ownedElement
+        derived ref      importedMember: PackageableElement [0..*] subsets member
+            derive "elementImport.importedElement->asSet()->union(packageImport.importedPackage->collect(p | p.visibleMembers()))->asSet()"
+
+        invariant cannot_import_self: "packageImport->forAll(i | i.importedPackage <> self)"
+            message "A namespace can't import itself."
+        invariant cannot_import_ownedMembers: "elementImport.importedElement->asSet()->excludesAll(ownedMember)"
+            message "A namespace can't import what it owns."
+    }
+
+    abstract kind PackageableElement extends ParameterableElement, NamedElement {
+        prop visibility: VisibilityKind [0..1] = public
+    }
+
+    kind ElementImport extends DirectedRelationship {
+        prop alias:      string [0..1]
+        prop visibility: VisibilityKind = public
+        ref  importedElement: PackageableElement [1] subsets target
+        derived ref importingNamespace: Namespace [0..1] opposite elementImport subsets source, owner
+
+        invariant visibility_public_or_private: "visibility = VisibilityKind::public or visibility = VisibilityKind::private"
+            message "An element import's visibility is public or private."
+        invariant imported_element_is_public: "not importedElement.visibility.oclIsUndefined() implies importedElement.visibility = VisibilityKind::public"
+            message "Only a public element can be imported."
+        visual { source: "owner"  target: "importedElement"  line: "dashed"  targetMarker: "arrow"  label: "«import»" }
+    }
+
+    kind PackageImport extends DirectedRelationship {
+        prop visibility: VisibilityKind = public
+        ref  importedPackage: Package [1] subsets target
+        derived ref importingNamespace: Namespace [0..1] opposite packageImport subsets source, owner
+
+        invariant public_or_private: "visibility = VisibilityKind::public or visibility = VisibilityKind::private"
+            message "A package import's visibility is public or private."
+        visual { source: "owner"  target: "importedPackage"  line: "dashed"  targetMarker: "arrow"  label: "«import»" }
+    }
+
+    // ------------------------------------------------------------ 7.5 types and multiplicities
+
+    abstract kind Type extends PackageableElement {
+        derived ref package: Package [0..1] opposite packagedElement
+    }
+
+    abstract kind TypedElement extends NamedElement {
+        ref type: Type [0..1]
+    }
+
+    // UnlimitedNatural is an int here, -1 for * (unlimited).
+    abstract kind MultiplicityElement extends Element {
+        prop isOrdered: bool = false
+        prop isUnique:  bool = true
+        contains lowerValue: ValueSpecification [0..1] subsets ownedElement
+        contains upperValue: ValueSpecification [0..1] subsets ownedElement
+        derived prop lower: int [0..1] derive "lowerBound()"
+        derived prop upper: int [0..1] derive "upperBound()"
+
+        query lowerBound(): int = "if lowerValue.oclIsUndefined() then 1 else lowerValue.integerValue() endif"
+        query upperBound(): int = "if upperValue.oclIsUndefined() then 1 else upperValue.unlimitedValue() endif"
+        query isMultivalued(): bool = "upperBound() = -1 or upperBound() > 1"
+
+        invariant lower_ge_0: "lowerBound() >= 0"
+            message "A lower bound can't be negative."
+        invariant upper_ge_lower: "upperBound() = -1 or upperBound() >= lowerBound()"
+            message "The upper bound is at least the lower bound."
+        invariant lower_is_integer: "lowerValue.oclIsUndefined() or not lowerValue.integerValue().oclIsUndefined()"
+            message "A lower bound is an integer."
+        invariant upper_is_unlimitedNatural: "upperValue.oclIsUndefined() or not upperValue.unlimitedValue().oclIsUndefined()"
+            message "An upper bound is a natural number, or *."
+    }
+
+    // ------------------------------------------------------------ 7.6 constraints
+
+    kind Constraint extends PackageableElement {
+        ordered ref constrainedElement: Element [0..*] { line: "dashed"  targetMarker: "none"  label: "" }
+        contains specification: ValueSpecification [1] subsets ownedElement
+        derived ref context: Namespace [0..1] opposite ownedRule subsets namespace
+
+        invariant not_apply_to_self: "not constrainedElement->includes(self)"
+            message "A constraint can't constrain itself."
+        visual { shape: "rectangle"  color: "#e2e8f0"  labelColor: "#0f172a"  label: "{{name}}" }
+    }
+
+    // ------------------------------------------------------------ 7.7 dependencies and relationships
+
+    abstract kind Relationship extends Element {
+        derived ref relatedElement: Element [0..*]
+    }
+
+    abstract kind DirectedRelationship extends Relationship {
+        derived ref source: Element [0..*] subsets relatedElement
+        derived ref target: Element [0..*] subsets relatedElement
+    }
+
+    kind Dependency extends DirectedRelationship, PackageableElement {
+        ref client:   NamedElement [1..*] subsets source
+        ref supplier: NamedElement [1..*] subsets target
+        visual { source: "client"  target: "supplier"  line: "dashed"  targetMarker: "arrow"  label: "" }
+    }
+
+    kind Abstraction extends Dependency {
+        contains mapping: OpaqueExpression [0..1] subsets ownedElement
+        visual { label: "«abstraction»" }
+    }
+
+    kind Realization extends Abstraction {
+        visual { targetMarker: "triangle"  label: "«realize»" }
+    }
+
+    kind Usage extends Dependency {
+        visual { label: "«use»" }
+    }
+}

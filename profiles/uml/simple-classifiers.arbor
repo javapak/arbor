@@ -1,0 +1,61 @@
+// UML 2.5.1, clause 10: Simple Classifiers. Data types, primitive types,
+// enumerations, signals and receptions, interfaces.
+//
+// Not yet: InterfaceRealization (it's owned by a BehavioredClassifier, clause
+// 13) and Interface::protocol (a protocol state machine, clause 14).
+profile uml part "SimpleClassifiers" version "2.5.1" {
+
+    // ------------------------------------------------------------ 10.2 data types
+
+    kind DataType extends Classifier {
+        ordered contains ownedAttribute: Property [0..*] subsets attribute, ownedMember
+        ordered contains ownedOperation: Operation [0..*] subsets feature, ownedMember
+        visual { shape: "rectangle"  color: "#94a3b8"  label: "«dataType» {name}" }
+    }
+
+    kind PrimitiveType extends DataType {
+        visual { color: "#a1a1aa"  label: "«primitive» {name}" }
+    }
+
+    kind Enumeration extends DataType {
+        ordered contains ownedLiteral: EnumerationLiteral [0..*] subsets ownedMember
+
+        invariant immutable: "ownedAttribute->forAll(a | a.isReadOnly)"
+            message "An enumeration's attributes are read-only."
+        visual { color: "#a3a3a3"  label: "«enumeration» {name}" }
+    }
+
+    kind EnumerationLiteral extends InstanceSpecification {
+        derived ref enumeration: Enumeration [0..1] opposite ownedLiteral
+        visual { member: true  label: "{name}" }
+    }
+
+    // ------------------------------------------------------------ 10.3 signals
+
+    kind Signal extends Classifier {
+        ordered contains ownedAttribute: Property [0..*] subsets attribute, ownedMember
+        visual { shape: "rectangle"  color: "#fb923c"  label: "«signal» {name}" }
+    }
+
+    kind Reception extends BehavioralFeature {
+        ref signal: Signal [0..1]
+
+        invariant same_name_as_signal: "signal.oclIsUndefined() or name = signal.name"
+            message "A reception has its signal's name."
+        visual { member: true  label: "«signal» {name}" }
+    }
+
+    // ------------------------------------------------------------ 10.4 interfaces
+
+    kind Interface extends Classifier {
+        ordered contains ownedAttribute:   Property [0..*] subsets attribute, ownedMember
+        ordered contains ownedOperation:   Operation [0..*] subsets feature, ownedMember
+        ordered contains nestedClassifier: Classifier [0..*] subsets ownedMember
+        contains         ownedReception:   Reception [0..*] subsets feature, ownedMember
+        ref              redefinedInterface: Interface [0..*] subsets redefinedClassifier
+
+        invariant visibility: "feature->forAll(f | f.visibility.oclIsUndefined() or f.visibility = VisibilityKind::public)"
+            message "An interface's features are public."
+        visual { shape: "rectangle"  color: "#22c55e"  label: "«interface» {name}" }
+    }
+}
